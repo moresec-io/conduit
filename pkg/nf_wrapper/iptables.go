@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package nf_wrapper
 
 import (
@@ -68,6 +74,8 @@ func OptionIptablesChainOperate(operation string) OptionIptables {
 			op = "-X"
 		case IptablesChainI:
 			op = "-I"
+		case IptablesChainCheck:
+			op = "-C"
 		default:
 			return nil, errors.New("unsupported operation")
 		}

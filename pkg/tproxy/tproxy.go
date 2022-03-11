@@ -1,16 +1,23 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package tproxy
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"github.com/jumboframes/conduit/pkg/log"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/jumboframes/conduit/pkg/log"
 )
 
 const (
@@ -89,7 +96,7 @@ func NewTProxy(ctx context.Context, localAddr string, options ...OptionTProxy) (
 		return nil, err
 	}
 
-	tproxy := &TProxy{}
+	tproxy := &TProxy{enable: 1}
 	for _, option := range options {
 		if err = option(tproxy); err != nil {
 			return nil, err
@@ -193,12 +200,12 @@ func (pipe *Pipe) proxy() {
 	//预先连接
 	if pipe.tproxy.preDial != nil {
 		if err := pipe.tproxy.preDial(pipe, pipe.custom); err != nil {
+			log.Errorf("Pipe:proxy | pre dial error: %v", err)
 			_ = pipe.leftConn.Close()
 			return
 		}
 	}
 
-	log.Debugf("tpProxy debug: start dial")
 	var err error
 	dial := rawSyscallDial
 	if pipe.tproxy.dial != nil {
@@ -206,7 +213,7 @@ func (pipe *Pipe) proxy() {
 	}
 	pipe.rightConn, err = dial(pipe, pipe.custom)
 	if err != nil {
-		log.Errorf("tpProxy dial error: %v", err)
+		log.Errorf("Pipe:proxy | dial error: %v", err)
 		_ = pipe.leftConn.Close()
 		return
 	}
@@ -214,7 +221,7 @@ func (pipe *Pipe) proxy() {
 	//连接后
 	if pipe.tproxy.postDial != nil {
 		if err := pipe.tproxy.postDial(pipe, pipe.custom); err != nil {
-			log.Errorf("tpProxy dial error: %v", err)
+			log.Errorf("Pipe:proxy | post dial error: %v", err)
 			_ = pipe.leftConn.Close()
 			_ = pipe.rightConn.Close()
 			return
@@ -256,14 +263,14 @@ func (pipe *Pipe) proxy() {
 		select {
 		case <-exist:
 		case <-pipe.tproxy.ctx.Done():
-			log.Debugf("force pipe done from parent")
+			log.Debugf("Pipe::proxy | force pipe done from parent")
 			_ = pipe.leftConn.Close()
 			_ = pipe.rightConn.Close()
 		}
 	}()
 	wg.Wait()
 
-	log.Debugf("close right and left conn")
+	log.Debugf("Pipe::proxy | close right and left conn")
 	_ = pipe.rightConn.Close()
 	_ = pipe.leftConn.Close()
 }

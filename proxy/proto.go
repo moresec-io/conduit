@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package proxy
 
 const (
@@ -7,8 +13,10 @@ const (
 )
 
 type MSProxyProto struct {
-	SrcIp         string
-	SrcPort       int
-	DstIpOrigin   string
-	DstPortOrigin int
+	SrcIp   string
+	SrcPort int
+	DstIp   string
+	DstPort int
+	Proxy   string
+	Dst     string
 }

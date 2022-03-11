@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package proxy
 
 import (
@@ -9,7 +15,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
-	"strconv"
 
 	"github.com/jumboframes/conduit"
 	"github.com/jumboframes/conduit/pkg/log"
@@ -76,7 +81,15 @@ func NewServer(conf *conduit.Config) (*Server, error) {
 	return server, nil
 }
 
-func (server *Server) Proxy() error {
+func (server *Server) Work() error {
+	err := server.proxy()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (server *Server) proxy() error {
 	for {
 		conn, err := server.listener.Accept()
 		if err != nil {
@@ -105,8 +118,7 @@ func (server *Server) Proxy() error {
 				log.Errorf("Server::Proxy | json unmarshal err: %s", err)
 				return
 			}
-			addr := proto.DstIpOrigin + ":" + strconv.Itoa(proto.DstPortOrigin)
-			tcpAddr, err := net.ResolveTCPAddr("tcp4", addr)
+			tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.Dst)
 			if err != nil {
 				conn.Close()
 				log.Errorf("Server::Proxy | net resolve err: %s", err)

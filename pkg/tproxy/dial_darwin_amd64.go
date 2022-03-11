@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 // +build darwin,amd64
 
 package tproxy
@@ -5,12 +11,13 @@ package tproxy
 import (
 	"errors"
 	"fmt"
-	"github.com/jumboframes/conduit/pkg/log"
 	"net"
 	"os"
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/jumboframes/conduit/pkg/log"
 )
 
 func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {

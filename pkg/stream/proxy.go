@@ -3,11 +3,12 @@ package stream
 import (
 	"crypto/tls"
 	"io"
-	"github.com/jumboframes/conduit/pkg/libio"
-	"github.com/jumboframes/conduit/pkg/log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/jumboframes/conduit/pkg/libio"
+	"github.com/jumboframes/conduit/pkg/log"
 )
 
 func connectToRemote(raddr *net.TCPAddr, isTLS bool) (net.Conn, error) {
@@ -53,21 +54,18 @@ func newBasicProxy(lconn, rconn net.Conn) *basicProxy {
 func (p *basicProxy) Proxy() {
 	defer p.lconn.Close()
 	defer p.rconn.Close()
-
 	//p.rconn.SetDeadline(time.Now().Add(time.Minute * 5))
-
-	log.Debugf("basicProxy::Proxy | %s -> %s Start", p.lconn.LocalAddr(), p.rconn.RemoteAddr())
-	defer log.Debugf("basicProxy::Proxy | %s -> %s Closed", p.lconn.LocalAddr(), p.rconn.RemoteAddr())
-
+	log.Debugf("basicProxy::Proxy | %s to %s starts",
+		p.lconn.LocalAddr(), p.rconn.RemoteAddr())
+	defer log.Debugf("basicProxy::Proxy | %s to %s ends",
+		p.lconn.LocalAddr(), p.rconn.RemoteAddr())
 	streamCopy(p.lconn, p.rconn)
 }
 
-// TCPProxy - 单纯的TCP代理，代理应用场景为一般的TCP服务
 type TCPProxy struct {
 	*basicProxy
 }
 
-// NewTCPProxy - 通用 TCP/TLS 代理
 func NewTCPProxy(lconn net.Conn, raddr *net.TCPAddr, isTLS bool) (*TCPProxy, error) {
 	rconn, err := connectToRemote(raddr, isTLS)
 	if err != nil {

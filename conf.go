@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package conduit
 
 import (
@@ -18,7 +24,7 @@ var (
 
 	h           bool
 	file        string
-	defaultFile string = "./github.com/jumboframes/conduit.yaml"
+	defaultFile string = "./conduit.yaml"
 )
 
 type Config struct {
@@ -38,12 +44,16 @@ type Config struct {
 	Client struct {
 		Enable bool `yaml:"enable"`
 		Proxy  struct {
-			Mode       string   `yaml:"mode"`
-			Listen     string   `yaml:"listen"`
-			Chain      string   `yaml:"chain"`
-			Addrs      []string `yaml:"addrs"`
-			Timeout    int      `yaml:"timeout"`
-			ServerPort int      `yaml:"server_port"`
+			Mode      string     `yaml:"mode"`
+			Listen    string     `yaml:"listen"`
+			CheckTime int        `yaml:"check_time"`
+			Transfers []struct { // dst -> proxy -> dst_to
+				Dst   string `yaml:"dst"`    // :9092
+				Proxy string `yaml:"proxy"`  // 192.168.0.2
+				DstTo string `yaml:"dst_to"` // 127.0.0.1:9092
+			} `yaml:"transfers"`
+			Timeout    int `yaml:"timeout"`
+			ServerPort int `yaml:"server_port"`
 		} `yaml:"proxy"`
 		Cert struct {
 			CertFile string `yaml:"cert_file"`

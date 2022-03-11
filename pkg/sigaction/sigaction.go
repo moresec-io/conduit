@@ -1,12 +1,19 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Austin Zhai
+ * All rights reserved.
+ */
 package sigaction
 
 import (
 	"context"
-	"github.com/jumboframes/conduit/pkg/log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/jumboframes/conduit/pkg/log"
 )
 
 var (
