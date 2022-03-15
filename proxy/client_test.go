@@ -7,13 +7,12 @@
 package proxy
 
 import (
+	"ms_proxy"
 	"testing"
-
-	"github.com/jumboframes/conduit"
 )
 
 func TestSetTables(t *testing.T) {
-	conf := &conduit.Config{}
+	conf := &ms_proxy.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`
@@ -32,7 +31,7 @@ func TestSetTables(t *testing.T) {
 }
 
 func TestUnSetTables(t *testing.T) {
-	conf := &conduit.Config{}
+	conf := &ms_proxy.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`

@@ -101,33 +101,35 @@ func (server *Server) proxy() error {
 			_, err := io.ReadFull(conn, bs)
 			if err != nil {
 				conn.Close()
-				log.Errorf("Server::Proxy | read size err: %s", err)
+				log.Errorf("Server::proxy | read size err: %s", err)
 				return
 			}
 			data := make([]byte, binary.LittleEndian.Uint32(bs))
 			_, err = io.ReadFull(conn, data)
 			if err != nil {
 				conn.Close()
-				log.Errorf("Server::Proxy | read meta err: %s", err)
+				log.Errorf("Server::proxy | read meta err: %s", err)
 				return
 			}
 			proto := &MSProxyProto{}
 			err = json.Unmarshal(data, proto)
 			if err != nil {
 				conn.Close()
-				log.Errorf("Server::Proxy | json unmarshal err: %s", err)
+				log.Errorf("Server::proxy | json unmarshal err: %s", err)
 				return
 			}
+			log.Debugf("Server::proxy | accept src: %s, dst: %s, to: %s",
+				conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.Dst)
 			tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.Dst)
 			if err != nil {
 				conn.Close()
-				log.Errorf("Server::Proxy | net resolve err: %s", err)
+				log.Errorf("Server::proxy | net resolve err: %s", err)
 				return
 			}
-			p, err := stream.NewTCPProxy(conn, tcpAddr, false)
+			p, err := stream.NewTCPProxy(conn, tcpAddr, false, control)
 			if err != nil {
 				conn.Close()
-				log.Errorf("Server::Proxy | new tcp proxy err: %s", err)
+				log.Errorf("Server::proxy | new tcp proxy err: %s", err)
 				return
 			}
 			p.Proxy()

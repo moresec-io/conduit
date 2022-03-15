@@ -14,6 +14,7 @@ import (
 var (
 	ErrChainExists  = errors.New("iptables: Chain already exists.")
 	ErrChainNoMatch = errors.New("iptables: No chain/target/match by that name.")
+	ErrBadRule      = errors.New("iptables: Bad rule (does a matching rule exist in that chain?).")
 )
 
 func IsErrChainExists(err []byte) bool {
@@ -25,6 +26,13 @@ func IsErrChainExists(err []byte) bool {
 
 func IsErrChainNoMatch(err []byte) bool {
 	if strings.Contains(string(err), ErrChainNoMatch.Error()) {
+		return true
+	}
+	return false
+}
+
+func IsErrBadRule(err []byte) bool {
+	if strings.Contains(string(err), ErrBadRule.Error()) {
 		return true
 	}
 	return false

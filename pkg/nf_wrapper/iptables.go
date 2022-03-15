@@ -107,6 +107,18 @@ func OptionIptableGo(target string) OptionIptables {
 	}
 }
 
+func OptionIptablesMatch(match string) OptionIptables {
+	return func(args []string) ([]string, error) {
+		return append(args, "-m", match), nil
+	}
+}
+
+func OptionIptablesMatchSubOptions(options ...string) OptionIptables {
+	return func(args []string) ([]string, error) {
+		return append(args, options...), nil
+	}
+}
+
 //例如
 func OptionIptablesJumpSubOptions(options ...string) OptionIptables {
 	return func(args []string) ([]string, error) {

@@ -5,21 +5,27 @@ import (
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jumboframes/conduit/pkg/libio"
 	"github.com/jumboframes/conduit/pkg/log"
 )
 
-func connectToRemote(raddr *net.TCPAddr, isTLS bool) (net.Conn, error) {
+func connectToRemote(raddr *net.TCPAddr, isTLS bool,
+	control func(network, address string, conn syscall.RawConn) error) (net.Conn, error) {
+
 	timeout := time.Second * 10
+	dialer := net.Dialer{
+		Timeout: timeout,
+		Control: control,
+	}
 	if isTLS {
-		dialer := net.Dialer{Timeout: timeout}
 		tc := tls.Config{InsecureSkipVerify: true}
 		return tls.DialWithDialer(&dialer, "tcp", raddr.String(), &tc)
 	}
 
-	return net.DialTimeout("tcp", raddr.String(), timeout)
+	return dialer.Dial("tcp", raddr.String())
 }
 
 func streamCopy(lconn io.ReadWriteCloser, rconn io.ReadWriteCloser) {
@@ -27,14 +33,20 @@ func streamCopy(lconn io.ReadWriteCloser, rconn io.ReadWriteCloser) {
 	wg.Add(2)
 
 	go func() {
-		_, _ = libio.Copy(lconn, rconn)
+		_, err := libio.Copy(lconn, rconn)
+		if err != nil {
+			log.Debugf("streamCopy | libio Copy right to left err: %s", err)
+		}
 		_ = lconn.Close()
 		_ = rconn.Close()
 		wg.Done()
 	}()
 
 	go func() {
-		_, _ = libio.Copy(rconn, lconn)
+		_, err := libio.Copy(rconn, lconn)
+		if err != nil {
+			log.Debugf("streamCopy | libio Copy left to right err: %s", err)
+		}
 		_ = lconn.Close()
 		_ = rconn.Close()
 		wg.Done()
@@ -66,8 +78,9 @@ type TCPProxy struct {
 	*basicProxy
 }
 
-func NewTCPProxy(lconn net.Conn, raddr *net.TCPAddr, isTLS bool) (*TCPProxy, error) {
-	rconn, err := connectToRemote(raddr, isTLS)
+func NewTCPProxy(lconn net.Conn, raddr *net.TCPAddr, isTLS bool,
+	control func(network, address string, conn syscall.RawConn) error) (*TCPProxy, error) {
+	rconn, err := connectToRemote(raddr, isTLS, control)
 	if err != nil {
 		return nil, err
 	}
