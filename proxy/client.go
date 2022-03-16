@@ -68,6 +68,14 @@ func (client *Client) Work() error {
 	}
 
 	err = client.setTables()
+	if err != nil {
+		return err
+	}
+
+	err = client.setProc()
+	if err != nil {
+		return err
+	}
 	return err
 }
 
