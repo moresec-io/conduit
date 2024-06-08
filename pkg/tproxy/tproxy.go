@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/jumboframes/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/log"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 
 type OptionTProxy func(tproxy *TProxy) error
 
-//如果返回err则断开连接
+// 如果返回err则断开连接
 type PostAccept func(src net.Addr, dst net.Addr) (interface{}, error)
 type PreWrite func(writer io.Writer, pipe *Pipe, custom interface{}) error
 type PreDial func(pipe *Pipe, custom interface{}) error
@@ -282,7 +282,7 @@ func (pipe *Pipe) dial() (net.Conn, error) {
 	return rightConn, err
 }
 
-//varify ipv4:port
+// varify ipv4:port
 func IPv4PortValid(ipPort string) bool {
 	parts := strings.Split(ipPort, ":")
 	if len(parts) != 2 {
@@ -300,7 +300,7 @@ func IPv4PortValid(ipPort string) bool {
 	return true
 }
 
-//注意没有拿到originalDst就会关闭连接
+// 注意没有拿到originalDst就会关闭连接
 func acquireOriginalDst(conn net.Conn) (net.Addr, *net.TCPConn, error) {
 	var err error
 	//需要从conn中找到原始dst addr

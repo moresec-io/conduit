@@ -13,7 +13,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/jumboframes/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/log"
 )
 
 var (

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jumboframes/conduit/pkg/log"
-	nfw "github.com/jumboframes/conduit/pkg/nf_wrapper"
+	"github.com/moresec-io/conduit/pkg/log"
+	nfw "github.com/moresec-io/conduit/pkg/nf_wrapper"
 )
 
 func (client *Client) setTables() error {

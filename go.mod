@@ -1,4 +1,4 @@
-module github.com/jumboframes/conduit
+module github.com/moresec-io/conduit
 
 go 1.17
 

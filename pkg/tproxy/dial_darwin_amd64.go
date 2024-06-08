@@ -1,10 +1,12 @@
+//go:build darwin && amd64
+// +build darwin,amd64
+
 /*
  * Apache License 2.0
  *
  * Copyright (c) 2022, Austin Zhai
  * All rights reserved.
  */
-// +build darwin,amd64
 
 package tproxy
 
@@ -17,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jumboframes/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/log"
 )
 
 func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {

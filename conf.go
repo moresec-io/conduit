@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/jumboframes/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/log"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"gopkg.in/yaml.v2"

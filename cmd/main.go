@@ -9,10 +9,10 @@ package main
 import (
 	"context"
 
-	"github.com/jumboframes/conduit"
-	"github.com/jumboframes/conduit/pkg/log"
-	"github.com/jumboframes/conduit/pkg/sigaction"
-	"github.com/jumboframes/conduit/proxy"
+	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/sigaction"
+	"github.com/moresec-io/conduit/proxy"
 )
 
 func main() {

@@ -16,9 +16,9 @@ import (
 	"io/ioutil"
 	"net"
 
-	"github.com/jumboframes/conduit"
-	"github.com/jumboframes/conduit/pkg/log"
-	"github.com/jumboframes/conduit/pkg/stream"
+	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/stream"
 )
 
 type Server struct {

@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jumboframes/conduit"
-	"github.com/jumboframes/conduit/pkg/log"
-	"github.com/jumboframes/conduit/pkg/tproxy"
+	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/tproxy"
 )
 
 const (

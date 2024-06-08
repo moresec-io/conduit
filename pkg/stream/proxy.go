@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jumboframes/conduit/pkg/libio"
-	"github.com/jumboframes/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/libio"
+	"github.com/moresec-io/conduit/pkg/log"
 )
 
 func connectToRemote(raddr *net.TCPAddr, isTLS bool,
