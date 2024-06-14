@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package tproxy
@@ -48,7 +48,6 @@ func Test_TProxy(t *testing.T) {
 //}
 
 func PreDialTest(pipe *Pipe, customer interface{}) error {
-	pipe.ForceDstAddr("192.168.110.160:5555")
 	return nil
 }
 
