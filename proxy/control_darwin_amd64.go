@@ -1,10 +1,12 @@
+//go:build darwin && amd64
+// +build darwin,amd64
+
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-// +build darwin,amd64
 
 package proxy
 
