@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/moresec-io/conduit/pkg/libio"
 	"github.com/moresec-io/conduit/pkg/log"
 )
 
@@ -33,7 +32,8 @@ func streamCopy(lconn io.ReadWriteCloser, rconn io.ReadWriteCloser) {
 	wg.Add(2)
 
 	go func() {
-		_, err := libio.Copy(lconn, rconn)
+		//_, err := libio.Copy(lconn, rconn)
+		_, err := io.Copy(lconn, rconn)
 		if err != nil {
 			log.Debugf("streamCopy | libio Copy right to left err: %s", err)
 		}
@@ -43,7 +43,8 @@ func streamCopy(lconn io.ReadWriteCloser, rconn io.ReadWriteCloser) {
 	}()
 
 	go func() {
-		_, err := libio.Copy(rconn, lconn)
+		//_, err := libio.Copy(rconn, lconn)
+		_, err := io.Copy(rconn, lconn)
 		if err != nil {
 			log.Debugf("streamCopy | libio Copy left to right err: %s", err)
 		}

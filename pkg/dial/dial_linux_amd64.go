@@ -8,7 +8,7 @@
  * All rights reserved.
  */
 
-package tproxy
+package dial
 
 import (
 	"errors"
@@ -21,7 +21,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/log"
 )
 
-func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {
+func RawSyscallDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	var rightConn net.Conn
 	var err error
 
@@ -31,7 +31,7 @@ func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {
 	}
 	defer syscall.Close(fd)
 
-	sockAddr, err := netAddr2Sockaddr(pipe.OriginalDst)
+	sockAddr, err := netAddr2Sockaddr(dst)
 	if err != nil {
 		return nil, err
 	}

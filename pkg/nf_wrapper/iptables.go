@@ -139,6 +139,12 @@ func OptionIptablesInIf(nic string) OptionIptables {
 	}
 }
 
+func OptionIptablesNotOutIf(nic string) OptionIptables {
+	return func(args []string) ([]string, error) {
+		return append(args, "!", "-o", nic), nil
+	}
+}
+
 func OptionIptablesIPv4SrcIp(ip string) OptionIptables {
 	return func(args []string) ([]string, error) {
 		return append(args, "-s", ip), nil

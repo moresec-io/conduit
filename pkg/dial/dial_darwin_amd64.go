@@ -1,5 +1,5 @@
-//go:build linux && amd64
-// +build linux,amd64
+//go:build darwin && amd64
+// +build darwin,amd64
 
 /*
  * Apache License 2.0
@@ -8,7 +8,7 @@
  * All rights reserved.
  */
 
-package tproxy
+package dial
 
 import (
 	"errors"
@@ -21,7 +21,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/log"
 )
 
-func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {
+func RawSyscallDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	var rightConn net.Conn
 	var err error
 
@@ -31,7 +31,7 @@ func rawSyscallDial(pipe *Pipe, custom interface{}) (net.Conn, error) {
 	}
 	defer syscall.Close(fd)
 
-	sockAddr, err := netAddr2Sockaddr(pipe.OriginalDst)
+	sockAddr, err := netAddr2Sockaddr(dst)
 	if err != nil {
 		return nil, err
 	}
@@ -71,11 +71,6 @@ func newSocket() (fd int, err error) {
 	}
 
 	if err = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
-		syscall.Close(fd)
-		return -1, err
-	}
-
-	if err = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_MARK, 5053); err != nil {
 		syscall.Close(fd)
 		return -1, err
 	}
@@ -128,7 +123,7 @@ func connect(fd int, ra syscall.Sockaddr, deadline time.Time) error {
 		//   	 return err
 		//   }
 		// so we use select instead.
-		if _, err = Select(fd+1, nil, &pw, nil, toptr); err != nil {
+		if err = Select(fd+1, nil, &pw, nil, toptr); err != nil {
 			return err
 		}
 
@@ -156,6 +151,6 @@ func FD_SET(fd uintptr, p *syscall.FdSet) {
 	p.Bits[n] |= 1 << uint32(k)
 }
 
-func Select(nfd int, r *syscall.FdSet, w *syscall.FdSet, e *syscall.FdSet, timeout *syscall.Timeval) (int, error) {
+func Select(nfd int, r *syscall.FdSet, w *syscall.FdSet, e *syscall.FdSet, timeout *syscall.Timeval) error {
 	return syscall.Select(nfd, r, w, e, timeout)
 }
