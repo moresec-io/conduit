@@ -13,6 +13,7 @@ import (
 	"github.com/moresec-io/conduit"
 	"github.com/moresec-io/conduit/pkg/log"
 	"github.com/moresec-io/conduit/proxy"
+	//_ "net/http/pprof"
 )
 
 func main() {
@@ -21,10 +22,19 @@ func main() {
 		log.Fatalf("main | init err: %s", err)
 		return
 	}
+	defer conduit.RotateLog.Close()
+
+	//go http.ListenAndServe("0.0.0.0:6060", nil)
+
+	err = conduit.SetRLimit(1024 * 1024)
+	if err != nil {
+		log.Fatalf("main | set rlimit err: %s", err)
+		return
+	}
 
 	log.Infof(`
 ==================================================
-                  CONDUIT STARTS
+                 CONDUIT STARTS
 ==================================================`)
 
 	var server *proxy.Server
@@ -61,6 +71,6 @@ func main() {
 
 	log.Infof(`
 ==================================================
-                  CONDUIT ENDS
+                 CONDUIT ENDS
 ==================================================`)
 }

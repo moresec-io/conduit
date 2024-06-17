@@ -47,12 +47,12 @@ func Test_TProxy(t *testing.T) {
 //	tproxy.Listen()
 //}
 
-func PreDialTest(pipe *Pipe, customer interface{}) error {
+func PreDialTest(customer interface{}) error {
 	return nil
 }
 
-func PreWriteTest(writer io.Writer, pipe *Pipe, custom interface{}) error {
+func PreWriteTest(writer io.Writer, custom interface{}) error {
 	_, err := writer.Write([]byte(
-		fmt.Sprintf("MS_PROXY %s %s %s cpf_forward\n", pipe.Src.String(), pipe.OriginalDst.String(), "192.168.110.205:22")))
+		fmt.Sprintf("github.com/moresec-io/conduit %s cpf_forward\n", "192.168.110.205:22")))
 	return err
 }
