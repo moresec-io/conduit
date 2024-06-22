@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package proxy
@@ -20,6 +20,8 @@ import (
 
 	"github.com/moresec-io/conduit"
 	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/mtls"
+	"github.com/moresec-io/conduit/pkg/pproxy"
 	"github.com/moresec-io/conduit/pkg/tproxy"
 )
 
@@ -30,6 +32,7 @@ const (
 type Client struct {
 	conf  *conduit.Config
 	tp    *tproxy.TProxy
+	pps   []*pproxy.PProxy
 	certs []tls.Certificate
 	quit  chan struct{}
 	// listen port
@@ -42,8 +45,7 @@ func NewClient(conf *conduit.Config) (*Client, error) {
 		quit: make(chan struct{}),
 	}
 	if conf.Client.Proxy.Mode == ProxyModeMTls {
-		cert, err := tls.LoadX509KeyPair(conf.Client.Cert.CertFile,
-			conf.Client.Cert.KeyFile)
+		cert, err := mtls.LoadX509KeyPair(conf.Client.Cert.CertFile, conf.Client.Cert.KeyFile, "")
 		if err != nil {
 			return nil, err
 		}
@@ -62,68 +64,65 @@ func NewClient(conf *conduit.Config) (*Client, error) {
 }
 
 func (client *Client) Work() error {
-	err := client.proxy()
-	if err != nil {
-		return err
-	}
+	switch client.conf.Client.Proxy.LocalMode {
+	default:
+		err := client.tproxy()
+		if err != nil {
+			return err
+		}
 
-	err = client.setTables()
-	if err != nil {
-		return err
-	}
+		err = client.setTables()
+		if err != nil {
+			return err
+		}
 
-	err = client.setProc()
-	if err != nil {
-		return err
+		err = client.setProc()
+		if err != nil {
+			return err
+		}
+	case "port":
+		err := client.pproxy()
+		if err != nil {
+			return err
+		}
 	}
-	return err
-}
-
-func (client *Client) proxy() error {
-	tp, err := tproxy.NewTProxy(context.TODO(), client.conf.Client.Proxy.Listen,
-		tproxy.OptionTProxyPostAccept(client.tproxyPostAccept),
-		tproxy.OptionTProxyPreDial(client.tproxyPreDial),
-		tproxy.OptionTProxyPostDial(client.tproxyPostDial),
-		tproxy.OptionTProxyPreWrite(client.tproxyPreWrite),
-		tproxy.OptionTProxyDial(client.tproxyDial))
-	if err != nil {
-		return err
-	}
-	go tp.Listen()
-	client.tp = tp
 	return nil
 }
 
-func (client *Client) Close() {
-	client.tp.Close()
-	close(client.quit)
-	client.finiTables()
+// port proxy
+func (client *Client) pproxy() error {
+	client.pps = []*pproxy.PProxy{}
+	for _, transfer := range client.conf.Client.Proxy.Transfers {
+		tp, err := pproxy.NewPProxy(context.TODO(), transfer.Dst,
+			pproxy.OptionPProxyPostAccept(client.proxyPostAccept),
+			pproxy.OptionPProxyPreDial(client.proxyPreDial),
+			pproxy.OptionPProxyPostDial(client.proxyPostDial),
+			pproxy.OptionPProxyPreWrite(client.proxyPreWrite),
+			pproxy.OptionPProxyDial(client.proxyDial))
+		if err != nil {
+			return err
+		}
+		go tp.Listen()
+		client.pps = append(client.pps, tp)
+	}
+	return nil
 }
 
-type ctx struct {
-	srcIp   string //源ip
-	srcPort int    //源port
-	dstIp   string //原始目的ip
-	dstPort int    //原始目的port
-	proxy   string //代理
-	dst     string // 代理后地址
-}
-
-func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
-	log.Debugf("Client::tproxyPostAccept | src: %s, dst: %s", src.String(), dst.String())
+func (client *Client) proxyPostAccept(src, dst net.Addr) (interface{}, error) {
+	log.Debugf("Client::pproxyPostAccept | src: %s, dst: %s", src.String(), dst.String())
 
 	ipPort := strings.Split(src.String(), ":")
 	srcIp := ipPort[0]
 	srcPort, err := strconv.Atoi(ipPort[1])
 	if err != nil {
-		log.Errorf("Client::tproxyPostAccept | src port to int err: %s", err)
+		log.Errorf("Client::proxyPostAccept | src port to int err: %s", err)
 		return nil, err
 	}
 	ipPort = strings.Split(dst.String(), ":")
 	dstIp := ipPort[0]
 	dstPort, err := strconv.Atoi(ipPort[1])
 	if err != nil {
-		log.Errorf("Client::tproxyPostAccept | dst port to int err: %s", err)
+		log.Errorf("Client::proxyPostAccept | dst port to int err: %s", err)
 		return nil, err
 	}
 
@@ -151,87 +150,127 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 			}
 		}
 	}
+	log.Info(ctx)
 	return ctx, nil
 }
 
-func (client *Client) tproxyPreDial(pipe *tproxy.Pipe, custom interface{}) error {
-	// TODO
+// transparent proxy
+func (client *Client) tproxy() error {
+	tp, err := tproxy.NewTProxy(context.TODO(), client.conf.Client.Proxy.Listen,
+		tproxy.OptionTProxyPostAccept(client.proxyPostAccept),
+		tproxy.OptionTProxyPreDial(client.proxyPreDial),
+		tproxy.OptionTProxyPostDial(client.proxyPostDial),
+		tproxy.OptionTProxyPreWrite(client.proxyPreWrite),
+		tproxy.OptionTProxyDial(client.proxyDial))
+	if err != nil {
+		return err
+	}
+	go tp.Listen()
+	client.tp = tp
 	return nil
 }
 
-func (client *Client) tproxyDial(pipe *tproxy.Pipe, custom interface{}) (net.Conn, error) {
-	ctx := custom.(*ctx)
-	switch client.conf.Client.Proxy.Mode {
-	case ProxyModeRaw:
-		return client.rawDial(pipe, ctx)
-	case ProxyModeTls:
-		return client.tlsDial(pipe, ctx)
-	case ProxyModeMTls:
-		return client.mtlsDial(pipe, ctx)
-	default:
-		return nil, errors.New("unsupported proxy mode")
+func (client *Client) Close() {
+	if client.tp != nil {
+		client.tp.Close()
 	}
+	if client.pps != nil {
+		for _, pp := range client.pps {
+			pp.Close()
+		}
+	}
+	close(client.quit)
+	client.finiTables()
 }
 
-func (client *Client) rawDial(pipe *tproxy.Pipe, ctx *ctx) (net.Conn, error) {
+type ctx struct {
+	srcIp   string //源ip
+	srcPort int    //源port
+	dstIp   string //原始目的ip
+	dstPort int    //原始目的port
+	proxy   string //代理
+	dst     string // 代理后地址
+}
+
+func (client *Client) rawDial(ctx *ctx) (net.Conn, error) {
 	timeout := client.conf.Client.Proxy.Timeout
-	log.Debugf("Client::rawDial | src: %s, dst: %s, proxy: %s",
-		pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy)
+	log.Debugf("Client::rawDial | src: %s:%d, dst: %s:%d, proxy: %s",
+		ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy)
 	conn, err := net.DialTimeout("tcp4",
 		ctx.proxy,
 		time.Duration(timeout)*time.Second)
 	if err != nil {
 		log.Errorf("Client::rawDial | src: %s, dst: %s, proxy: %s, err: %s",
-			pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy, err)
+			ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy, err)
 		return nil, err
 	}
 	return conn, nil
 }
 
-func (client *Client) tlsDial(pipe *tproxy.Pipe, ctx *ctx) (net.Conn, error) {
+func (client *Client) tlsDial(ctx *ctx) (net.Conn, error) {
 	timeout := client.conf.Client.Proxy.Timeout
 	dialer := net.Dialer{
 		Timeout: time.Duration(timeout) * time.Second,
 		Control: control,
 	}
-	log.Debugf("Client::tlsDial | src: %s, dst: %s, proxy: %s",
-		pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy)
+	log.Debugf("Client::tlsDial | src: %s:%d, dst: %s:%d, proxy: %s",
+		ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy)
 	conn, err := tls.DialWithDialer(&dialer, "tcp4",
 		ctx.proxy,
 		&tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		log.Errorf("Client::tlsDial | src: %s, dst: %s, proxy: %s, err: %s",
-			pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy, err)
+			ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy, err)
 		return nil, err
 	}
 	return conn, nil
 }
 
-func (client *Client) mtlsDial(pipe *tproxy.Pipe, ctx *ctx) (net.Conn, error) {
+func (client *Client) mtlsDial(ctx *ctx) (net.Conn, error) {
 	timeout := client.conf.Client.Proxy.Timeout
 	dialer := net.Dialer{
 		Timeout: time.Duration(timeout) * time.Second,
 		Control: control,
 	}
-	log.Debugf("Client::mtlsDial | src: %s, dst: %s, proxy: %s",
-		pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy)
+	log.Debugf("Client::mtlsDial | src: %s:%d, dst: %s:%d, proxy: %s",
+		ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy)
 	conn, err := tls.DialWithDialer(&dialer, "tcp4",
 		ctx.proxy,
 		&tls.Config{InsecureSkipVerify: true, Certificates: client.certs})
 	if err != nil {
-		log.Errorf("Client::mtlsDial | src: %s, dst: %s, proxy: %s, err: %s",
-			pipe.Src.String(), pipe.OriginalDst.String(), ctx.proxy, err)
+		log.Errorf("Client::mtlsDial | src: %s:%d, dst: %s:%d, proxy: %s, err: %s",
+			ctx.srcIp, ctx.srcPort, ctx.dstIp, ctx.dstPort, ctx.proxy, err)
 		return nil, err
 	}
 	return conn, nil
 }
 
-func (client *Client) tproxyPostDial(pipe *tproxy.Pipe, custom interface{}) error {
+func (client *Client) proxyPreDial(custom interface{}) error {
 	// TODO
 	return nil
 }
 
-func (client *Client) tproxyPreWrite(writer io.Writer, pipe *tproxy.Pipe, custom interface{}) error {
+// func (client *Client) proxyDial(pipe *tproxy.Pipe, custom interface{}) (net.Conn, error) {
+func (client *Client) proxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
+	ctx := custom.(*ctx)
+	switch client.conf.Client.Proxy.Mode {
+	case ProxyModeRaw:
+		return client.rawDial(ctx)
+	case ProxyModeTls:
+		return client.tlsDial(ctx)
+	case ProxyModeMTls:
+		return client.mtlsDial(ctx)
+	default:
+		return nil, errors.New("unsupported proxy mode")
+	}
+}
+
+func (client *Client) proxyPostDial(custom interface{}) error {
+	// TODO
+	return nil
+}
+
+func (client *Client) proxyPreWrite(writer io.Writer, custom interface{}) error {
 	ctx := custom.(*ctx)
 	proto := &MSProxyProto{
 		SrcIp:   ctx.srcIp,

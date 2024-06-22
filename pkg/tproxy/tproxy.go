@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package tproxy
@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/moresec-io/conduit/pkg/dial"
 	"github.com/moresec-io/conduit/pkg/log"
 )
 
@@ -28,10 +29,10 @@ type OptionTProxy func(tproxy *TProxy) error
 
 // 如果返回err则断开连接
 type PostAccept func(src net.Addr, dst net.Addr) (interface{}, error)
-type PreWrite func(writer io.Writer, pipe *Pipe, custom interface{}) error
-type PreDial func(pipe *Pipe, custom interface{}) error
-type PostDial func(pipe *Pipe, custom interface{}) error
-type Dial func(pipe *Pipe, custom interface{}) (net.Conn, error)
+type PreWrite func(writer io.Writer, custom interface{}) error
+type PreDial func(custom interface{}) error
+type PostDial func(custom interface{}) error
+type Dial func(dst net.Addr, custom interface{}) (net.Conn, error)
 
 func OptionTProxyPostAccept(postAccept PostAccept) OptionTProxy {
 	return func(tproxy *TProxy) error {
@@ -114,6 +115,10 @@ func (tproxy *TProxy) Listen() {
 		//利用TProxy::Close来保障退出
 		conn, err := tproxy.listener.Accept()
 		if err != nil {
+			if strings.Contains(err.Error(), "too many open files") {
+				log.Errorf("tproxy accept conn err: %s, retrying", err)
+				continue
+			}
 			log.Errorf("tproxy accept conn err: %s, quiting", err)
 			return
 		}
@@ -173,11 +178,13 @@ func (tproxy *TProxy) delPipe(pipe *Pipe) {
 }
 
 func (tproxy *TProxy) Close() {
-	err := tproxy.listener.Close()
-	if err != nil {
-		log.Errorf("tproxy listener close err: %s, routine continued", err)
+	if tproxy.listener != nil {
+		err := tproxy.listener.Close()
+		if err != nil {
+			log.Errorf("tproxy listener close err: %s, routine continued", err)
+		}
+		tproxy.cancel()
 	}
-	tproxy.cancel()
 }
 
 type Pipe struct {
@@ -199,7 +206,7 @@ func (pipe *Pipe) proxy() {
 
 	//预先连接
 	if pipe.tproxy.preDial != nil {
-		if err := pipe.tproxy.preDial(pipe, pipe.custom); err != nil {
+		if err := pipe.tproxy.preDial(pipe.custom); err != nil {
 			log.Errorf("Pipe:proxy | pre dial error: %v", err)
 			_ = pipe.leftConn.Close()
 			return
@@ -207,11 +214,11 @@ func (pipe *Pipe) proxy() {
 	}
 
 	var err error
-	dial := rawSyscallDial
+	dial := dial.RawSyscallDial
 	if pipe.tproxy.dial != nil {
 		dial = pipe.tproxy.dial
 	}
-	pipe.rightConn, err = dial(pipe, pipe.custom)
+	pipe.rightConn, err = dial(pipe.OriginalDst, pipe.custom)
 	if err != nil {
 		log.Errorf("Pipe:proxy | dial error: %v", err)
 		_ = pipe.leftConn.Close()
@@ -220,7 +227,7 @@ func (pipe *Pipe) proxy() {
 
 	//连接后
 	if pipe.tproxy.postDial != nil {
-		if err := pipe.tproxy.postDial(pipe, pipe.custom); err != nil {
+		if err := pipe.tproxy.postDial(pipe.custom); err != nil {
 			log.Errorf("Pipe:proxy | post dial error: %v", err)
 			_ = pipe.leftConn.Close()
 			_ = pipe.rightConn.Close()
@@ -230,7 +237,7 @@ func (pipe *Pipe) proxy() {
 
 	//预先写
 	if pipe.tproxy.preWrite != nil {
-		if err = pipe.tproxy.preWrite(pipe.rightConn, pipe, pipe.custom); err != nil {
+		if err = pipe.tproxy.preWrite(pipe.rightConn, pipe.custom); err != nil {
 			_ = pipe.leftConn.Close()
 			_ = pipe.rightConn.Close()
 			return
@@ -243,7 +250,15 @@ func (pipe *Pipe) proxy() {
 	go func() {
 		defer wg.Done()
 
-		_, _ = io.Copy(pipe.leftConn, pipe.rightConn)
+		_, err := io.Copy(pipe.leftConn, pipe.rightConn)
+		if err != nil {
+			log.Debugf("Pipe::proxy | read right, src: %s, dst: %s; to left, src: %s, dst: %s err: %s",
+				pipe.rightConn.LocalAddr().String(),
+				pipe.rightConn.RemoteAddr().String(),
+				pipe.leftConn.RemoteAddr().String(),
+				pipe.leftConn.LocalAddr().String(),
+				err)
+		}
 		_ = pipe.rightConn.Close()
 		_ = pipe.leftConn.Close()
 	}()
@@ -251,7 +266,10 @@ func (pipe *Pipe) proxy() {
 	go func() {
 		defer wg.Done()
 
-		_, _ = io.Copy(pipe.rightConn, pipe.leftConn)
+		_, err := io.Copy(pipe.rightConn, pipe.leftConn)
+		if err != nil {
+			log.Debugf("Pipe::proxy | read left to right err: %s", err)
+		}
 		_ = pipe.rightConn.Close()
 		_ = pipe.leftConn.Close()
 	}()

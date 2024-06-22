@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package proxy
@@ -52,7 +52,8 @@ func (client *Client) initTables() error {
 		nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
 	)
 	if err != nil && !IsErrChainNoMatch(infoE) && !IsErrBadRule(infoE) {
-		log.Errorf("Client::SetTables | check mark err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::SetTables | check mark err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
 	if IsErrChainNoMatch(infoE) || IsErrBadRule(infoE) {
@@ -67,7 +68,8 @@ func (client *Client) initTables() error {
 			nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
 		)
 		if err != nil {
-			log.Errorf("Client::SetTables | insert mark err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+			log.Errorf("Client::SetTables | insert mark err: %s, infoO: %s, infoE: %s",
+				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 			return err
 		}
 	}
@@ -80,48 +82,58 @@ func (client *Client) initTables() error {
 		nfw.OptionIptablesChain(MsProxyChain),
 	)
 	if err != nil && !IsErrChainExists(infoE) {
-		log.Errorf("Client::SetTables | new chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::SetTables | new chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
 	// check chain at nat-prerouting
-	for _, bridge := range localBridges() {
+	//for _, bridge := range localBridges() {
+	infoO, infoE, err = nfw.IptablesRun(
+		nfw.OptionIptablesWait(),
+		nfw.OptionIptablesTable(nfw.IptablesTableNat),
+		nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
+		nfw.OptionIptablesChain(nfw.IptablesChainPrerouting),
+		//nfw.OptionIptablesInIf(bridge),
+		nfw.OptionIptablesInIf("br-+"),
+		nfw.OptionIptablesJump(MsProxyChain),
+	)
+	if err != nil && !IsErrChainNoMatch(infoE) {
+		log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+		return err
+	}
+	if IsErrChainNoMatch(infoE) {
 		infoO, infoE, err = nfw.IptablesRun(
 			nfw.OptionIptablesWait(),
 			nfw.OptionIptablesTable(nfw.IptablesTableNat),
-			nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
+			nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
 			nfw.OptionIptablesChain(nfw.IptablesChainPrerouting),
-			nfw.OptionIptablesInIf(bridge),
+			nfw.OptionIptablesInIf("br-+"),
+			//nfw.OptionIptablesInIf(bridge),
 			nfw.OptionIptablesJump(MsProxyChain),
 		)
-		if err != nil && !IsErrChainNoMatch(infoE) {
-			log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		if err != nil {
+			log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s",
+				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 			return err
 		}
-		if IsErrChainNoMatch(infoE) {
-			infoO, infoE, err = nfw.IptablesRun(
-				nfw.OptionIptablesWait(),
-				nfw.OptionIptablesTable(nfw.IptablesTableNat),
-				nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
-				nfw.OptionIptablesChain(nfw.IptablesChainPrerouting),
-				nfw.OptionIptablesInIf(bridge),
-				nfw.OptionIptablesJump(MsProxyChain),
-			)
-			if err != nil {
-				log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
-				return err
-			}
-		}
 	}
+	//}
 	// check chain at nat-output
+	//for _, bridge := range localBridges() {
 	infoO, infoE, err = nfw.IptablesRun(
 		nfw.OptionIptablesWait(),
 		nfw.OptionIptablesTable(nfw.IptablesTableNat),
 		nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
 		nfw.OptionIptablesChain(nfw.IptablesChainOutput),
+		// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
+		//nfw.OptionIptablesNotOutIf(bridge),
+		nfw.OptionIptablesNotOutIf("br-+"),
 		nfw.OptionIptablesJump(MsProxyChain),
 	)
 	if err != nil && !IsErrChainNoMatch(infoE) {
-		log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
 	if IsErrChainNoMatch(infoE) {
@@ -130,13 +142,18 @@ func (client *Client) initTables() error {
 			nfw.OptionIptablesTable(nfw.IptablesTableNat),
 			nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
 			nfw.OptionIptablesChain(nfw.IptablesChainOutput),
+			// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
+			//nfw.OptionIptablesNotOutIf(bridge),
+			nfw.OptionIptablesNotOutIf("br-+"),
 			nfw.OptionIptablesJump(MsProxyChain),
 		)
 		if err != nil {
-			log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+			log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s",
+				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 			return err
 		}
 	}
+	//}
 
 	// real maps
 	for _, transfer := range client.conf.Client.Proxy.Transfers {
@@ -146,6 +163,7 @@ func (client *Client) initTables() error {
 		if err != nil {
 			continue
 		}
+		dst := "127.0.0.1:" + strconv.Itoa(client.port)
 		if ip == "" {
 			// only port
 			infoO, infoE, err := nfw.IptablesRun(
@@ -155,14 +173,17 @@ func (client *Client) initTables() error {
 				nfw.OptionIptablesChain(MsProxyChain),
 				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
 				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
+				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
+				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
+				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
+				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
 			)
 			if err == nil || (err != nil && IsErrChainExists(infoE)) {
 				continue
 			}
 			if err != nil && !IsErrChainNoMatch(infoE) {
-				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s",
+					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 				return err
 			}
 
@@ -173,14 +194,17 @@ func (client *Client) initTables() error {
 				nfw.OptionIptablesChain(MsProxyChain),
 				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
 				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
+				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
+				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
+				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
+				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
 			)
 			if err != nil {
 				if IsErrChainExists(infoE) {
 					continue
 				}
-				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s",
+					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 				return err
 			}
 
@@ -194,14 +218,17 @@ func (client *Client) initTables() error {
 				nfw.OptionIptablesIPv4DstIp(ip),
 				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
 				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
+				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
+				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
+				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
+				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
 			)
 			if err == nil || (err != nil && IsErrChainExists(infoE)) {
 				continue
 			}
 			if err != nil && !IsErrChainNoMatch(infoE) {
-				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s",
+					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 				return err
 			}
 
@@ -213,14 +240,17 @@ func (client *Client) initTables() error {
 				nfw.OptionIptablesIPv4DstIp(ip),
 				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
 				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
+				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
+				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
+				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
+				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
 			)
 			if err != nil {
 				if IsErrChainExists(infoE) {
 					continue
 				}
-				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s",
+					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 				return err
 			}
 		}
@@ -240,7 +270,8 @@ func (client *Client) finiTables() {
 		nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
 	)
 	if err != nil {
-		log.Errorf("Client::finiTables | delete mark err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::finiTables | delete mark err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 	}
 	infoO, infoE, err = nfw.IptablesRun(
 		nfw.OptionIptablesWait(),
@@ -249,7 +280,8 @@ func (client *Client) finiTables() {
 		nfw.OptionIptablesChain(MsProxyChain),
 	)
 	if err != nil {
-		log.Errorf("Client::finiTables | flush chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::finiTables | flush chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 	}
 
 	infoO, infoE, err = nfw.IptablesRun(
@@ -260,7 +292,8 @@ func (client *Client) finiTables() {
 		nfw.OptionIptablesJump(MsProxyChain),
 	)
 	if err != nil {
-		log.Errorf("Client::finiTables | del output chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::finiTables | del output chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 	}
 
 	infoO, infoE, err = nfw.IptablesRun(
@@ -270,7 +303,8 @@ func (client *Client) finiTables() {
 		nfw.OptionIptablesChain(MsProxyChain),
 	)
 	if err != nil {
-		log.Errorf("Client::finiTables | del chain err: %s, infoO: %s, infoE: %s", err, infoO, infoE)
+		log.Errorf("Client::finiTables | del chain err: %s, infoO: %s, infoE: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 	}
 }
 

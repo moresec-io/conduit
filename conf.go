@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package conduit
@@ -14,13 +14,13 @@ import (
 
 	"github.com/moresec-io/conduit/pkg/log"
 
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	"github.com/natefinch/lumberjack"
 	"gopkg.in/yaml.v2"
 )
 
 var (
 	Conf      *Config
-	RotateLog *rotatelogs.RotateLogs
+	RotateLog *lumberjack.Logger
 
 	h           bool
 	file        string
@@ -45,11 +45,12 @@ type Config struct {
 		Enable bool `yaml:"enable"`
 		Proxy  struct {
 			Mode      string     `yaml:"mode"`
-			Listen    string     `yaml:"listen"`
+			LocalMode string     `yaml:"local_mode"`
+			Listen    string     `yaml:"listen"` // for transparent
 			CheckTime int        `yaml:"check_time"`
-			Transfers []struct { // dst -> proxy -> dst_to
+			Transfers []struct { // dstA -> B -> dstC
 				Dst   string `yaml:"dst"`    // :9092
-				Proxy string `yaml:"proxy"`  // 192.168.0.2
+				Proxy string `yaml:"proxy"`  // 192.168.111.149
 				DstTo string `yaml:"dst_to"` // 127.0.0.1:9092
 			} `yaml:"transfers"`
 			Timeout    int `yaml:"timeout"`
@@ -64,8 +65,8 @@ type Config struct {
 	Log struct {
 		Level    string `yaml:"level"`
 		File     string `yaml:"file"`
-		MaxSize  int64  `yaml:"maxsize"`
-		MaxRolls uint   `yaml:"maxrolls"`
+		MaxSize  int    `yaml:"maxsize"`
+		MaxRolls int    `yaml:"maxrolls"`
 	} `yaml:"log"`
 }
 
@@ -113,11 +114,10 @@ func initLog() error {
 		return err
 	}
 	log.SetLevel(level)
-	RotateLog, err = rotatelogs.New(Conf.Log.File,
-		rotatelogs.WithRotationCount(Conf.Log.MaxRolls),
-		rotatelogs.WithRotationSize(Conf.Log.MaxSize))
-	if err != nil {
-		return err
+	RotateLog = &lumberjack.Logger{
+		Filename:   Conf.Log.File,
+		MaxSize:    Conf.Log.MaxSize,
+		MaxBackups: Conf.Log.MaxRolls,
 	}
 	log.SetOutput(RotateLog)
 	return nil

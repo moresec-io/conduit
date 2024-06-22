@@ -4,7 +4,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 
@@ -12,7 +12,6 @@ package tproxy
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"strconv"
@@ -125,7 +124,6 @@ func connect(fd int, ra syscall.Sockaddr, deadline time.Time) error {
 		//   }
 		// so we use select instead.
 		if err = Select(fd+1, nil, &pw, nil, toptr); err != nil {
-			fmt.Println(err)
 			return err
 		}
 

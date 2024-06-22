@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package nf_wrapper
@@ -119,14 +119,14 @@ func OptionIptablesMatchSubOptions(options ...string) OptionIptables {
 	}
 }
 
-//例如
+// 例如
 func OptionIptablesJumpSubOptions(options ...string) OptionIptables {
 	return func(args []string) ([]string, error) {
 		return append(args, options...), nil
 	}
 }
 
-//protocol
+// protocol
 func OptionIptablesIPv4Proto(proto string) OptionIptables {
 	return func(args []string) ([]string, error) {
 		return append(args, "-p", proto), nil
@@ -136,6 +136,12 @@ func OptionIptablesIPv4Proto(proto string) OptionIptables {
 func OptionIptablesInIf(nic string) OptionIptables {
 	return func(args []string) ([]string, error) {
 		return append(args, "-i", nic), nil
+	}
+}
+
+func OptionIptablesNotOutIf(nic string) OptionIptables {
+	return func(args []string) ([]string, error) {
+		return append(args, "!", "-o", nic), nil
 	}
 }
 

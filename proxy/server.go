@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package proxy
@@ -18,6 +18,8 @@ import (
 
 	"github.com/moresec-io/conduit"
 	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/moresec-io/conduit/pkg/mtls"
+	"github.com/moresec-io/conduit/pkg/openssl"
 	"github.com/moresec-io/conduit/pkg/stream"
 )
 
@@ -42,8 +44,7 @@ func NewServer(conf *conduit.Config) (*Server, error) {
 			return nil, err
 		}
 	case ProxyModeTls:
-		cert, err := tls.LoadX509KeyPair(conf.Server.Cert.CertFile,
-			conf.Server.Cert.KeyFile)
+		cert, err := mtls.LoadX509KeyPair(conf.Server.Cert.CertFile, conf.Server.Cert.KeyFile, "")
 		if err != nil {
 			return nil, err
 		}
@@ -59,10 +60,13 @@ func NewServer(conf *conduit.Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
+		caDecrypt, err := openssl.Decrypt(openssl.TpAes, string(ca), "")
+		if err != nil {
+			return nil, err
+		}
 		caPool := x509.NewCertPool()
-		caPool.AppendCertsFromPEM(ca)
-		cert, err := tls.LoadX509KeyPair(conf.Server.Cert.CertFile,
-			conf.Server.Cert.KeyFile)
+		caPool.AppendCertsFromPEM([]byte(caDecrypt))
+		cert, err := mtls.LoadX509KeyPair(conf.Server.Cert.CertFile, conf.Server.Cert.KeyFile, "")
 		if err != nil {
 			return nil, err
 		}
