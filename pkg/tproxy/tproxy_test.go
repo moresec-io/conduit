@@ -48,7 +48,6 @@ func Test_TProxy(t *testing.T) {
 //}
 
 func PreDialTest(pipe *Pipe, customer interface{}) error {
-	pipe.ForceDstAddr("192.168.110.160:5555")
 	return nil
 }
 

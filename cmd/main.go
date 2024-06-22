@@ -9,9 +9,9 @@ package main
 import (
 	"context"
 
+	"github.com/jumboframes/armorigo/sigaction"
 	"github.com/moresec-io/conduit"
 	"github.com/moresec-io/conduit/pkg/log"
-	"github.com/moresec-io/conduit/pkg/sigaction"
 	"github.com/moresec-io/conduit/proxy"
 )
 

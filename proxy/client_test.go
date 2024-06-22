@@ -7,12 +7,13 @@
 package proxy
 
 import (
-	"ms_proxy"
 	"testing"
+
+	"github.com/moresec-io/conduit"
 )
 
 func TestSetTables(t *testing.T) {
-	conf := &ms_proxy.Config{}
+	conf := &conduit.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`
@@ -31,7 +32,7 @@ func TestSetTables(t *testing.T) {
 }
 
 func TestUnSetTables(t *testing.T) {
-	conf := &ms_proxy.Config{}
+	conf := &conduit.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`
