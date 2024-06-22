@@ -47,7 +47,7 @@ func Test_TProxy(t *testing.T) {
 //	tproxy.Listen()
 //}
 
-func PreDialTest(customer interface{}) error {
+func PreDialTest(pipe *Pipe, customer interface{}) error {
 	return nil
 }
 
