@@ -38,11 +38,13 @@ func (client *Client) setProc() error {
 }
 
 func (client *Client) initProc() error {
-	infoO, infoE, err := nfw.Cmd("echo", "1", ">", "/proc/sys/net/ipv4/conf/all/route_localnet")
+	infoO, infoE, err := nfw.Cmd("bash", "-c", "echo 1 > /proc/sys/net/ipv4/conf/all/route_localnet")
 	if err != nil {
 		log.Errorf("client::initProc | enable route local net err: %s, stdout: %s, stderr: %s",
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
+	log.Debugf("client::initProc | enable route local net success, stdout: %s, stderr: %s",
+		infoO, strings.TrimSuffix(string(infoE), "\n"))
 	return nil
 }
