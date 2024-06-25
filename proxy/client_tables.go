@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
-	nfw "github.com/moresec-io/conduit/pkg/nf_wrapper"
+	xtables "github.com/singchia/go-xtables"
+	"github.com/singchia/go-xtables/iptables"
+	"github.com/singchia/go-xtables/pkg/network"
 )
 
 func (client *Client) setTables() error {
@@ -40,122 +42,69 @@ func (client *Client) setTables() error {
 }
 
 func (client *Client) initTables() error {
+	ipt := iptables.NewIPTables()
 	// ignore the mark
-	infoO, infoE, err := nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
-		nfw.OptionIptablesChain(nfw.IptablesChainOutput),
-		nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-		nfw.OptionIptablesMatch("mark"),
-		nfw.OptionIptablesMatchSubOptions("--mark", "5053"),
-		nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
-	)
-	if err != nil && !IsErrChainNoMatch(infoE) && !IsErrBadRule(infoE) {
-		log.Errorf("Client::SetTables | check mark err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+	exist, err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
+		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+		OptionWait(0).TargetAccept().Check()
+	if err != nil {
+		log.Errorf("client init tables, check mark err: %s", err)
 		return err
 	}
-	if IsErrChainNoMatch(infoE) || IsErrBadRule(infoE) {
-		infoO, infoE, err := nfw.IptablesRun(
-			nfw.OptionIptablesWait(),
-			nfw.OptionIptablesTable(nfw.IptablesTableNat),
-			nfw.OptionIptablesChainOperate(nfw.IptablesChainI),
-			nfw.OptionIptablesChain(nfw.IptablesChainOutput),
-			nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-			nfw.OptionIptablesMatch("mark"),
-			nfw.OptionIptablesMatchSubOptions("--mark", "5053"),
-			nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
-		)
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
+			MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+			OptionWait(0).TargetAccept().Insert()
 		if err != nil {
-			log.Errorf("Client::SetTables | insert mark err: %s, infoO: %s, infoE: %s",
-				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+			log.Errorf("client init tables, insert mark err: %s", err)
 			return err
 		}
 	}
 
-	// check chain exists
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainNew),
-		nfw.OptionIptablesChain(MsProxyChain),
-	)
-	if err != nil && !IsErrChainExists(infoE) {
-		log.Errorf("Client::SetTables | new chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-		return err
-	}
-	// check chain at nat-prerouting
-	//for _, bridge := range localBridges() {
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
-		nfw.OptionIptablesChain(nfw.IptablesChainPrerouting),
-		//nfw.OptionIptablesInIf(bridge),
-		nfw.OptionIptablesInIf("br-+"),
-		nfw.OptionIptablesJump(MsProxyChain),
-	)
-	if err != nil && !IsErrChainNoMatch(infoE) {
-		log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-		return err
-	}
-	if IsErrChainNoMatch(infoE) {
-		infoO, infoE, err = nfw.IptablesRun(
-			nfw.OptionIptablesWait(),
-			nfw.OptionIptablesTable(nfw.IptablesTableNat),
-			nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
-			nfw.OptionIptablesChain(nfw.IptablesChainPrerouting),
-			nfw.OptionIptablesInIf("br-+"),
-			//nfw.OptionIptablesInIf(bridge),
-			nfw.OptionIptablesJump(MsProxyChain),
-		)
-		if err != nil {
-			log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s",
-				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+	// create chain
+	err = ipt.Table(iptables.TableTypeNat).OptionWait(0).NewChain(ConduitChain)
+	if err != nil {
+		ce, ok := err.(*xtables.CommandError)
+		if !ok || !IsErrChainExists(ce.Message) {
+			log.Errorf("client init tables, create conduit chain err: %s", err)
 			return err
 		}
 	}
-	//}
-	// check chain at nat-output
-	//for _, bridge := range localBridges() {
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
-		nfw.OptionIptablesChain(nfw.IptablesChainOutput),
+
+	// check jump conduit exists, in NAT-PREROUTING
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
+		OptionWait(0).TargetJumpChain(ConduitChain).Check()
+	if err != nil {
+		log.Errorf("client init tables, check jump conduit chain err: %s", err)
+		return err
+	}
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
+			OptionWait(0).TargetJumpChain(ConduitChain).Append()
+		if err != nil {
+			log.Errorf("client init tables, add jump conduit chain err: %s", err)
+		}
+	}
+
+	// check jump conduit exists, in NAT-OUTPUT
+	// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
+		OptionWait(0).TargetJumpChain(ConduitChain).Check()
+	if err != nil {
+		log.Errorf("client init tables, check jump conduit chain err: %s", err)
+		return err
+	}
+	if !exist {
 		// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
-		//nfw.OptionIptablesNotOutIf(bridge),
-		nfw.OptionIptablesNotOutIf("br-+"),
-		nfw.OptionIptablesJump(MsProxyChain),
-	)
-	if err != nil && !IsErrChainNoMatch(infoE) {
-		log.Errorf("Client::SetTables | check output chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-		return err
-	}
-	if IsErrChainNoMatch(infoE) {
-		infoO, infoE, err = nfw.IptablesRun(
-			nfw.OptionIptablesWait(),
-			nfw.OptionIptablesTable(nfw.IptablesTableNat),
-			nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
-			nfw.OptionIptablesChain(nfw.IptablesChainOutput),
-			// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
-			//nfw.OptionIptablesNotOutIf(bridge),
-			nfw.OptionIptablesNotOutIf("br-+"),
-			nfw.OptionIptablesJump(MsProxyChain),
-		)
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
+			OptionWait(0).TargetJumpChain(ConduitChain).Append()
 		if err != nil {
-			log.Errorf("Client::SetTables | add output chain err: %s, infoO: %s, infoE: %s",
-				err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+			log.Errorf("client init tables, add jump conduit chain err: %s", err)
 			return err
 		}
 	}
-	//}
 
-	// real maps
+	// do real maps
 	for _, transfer := range client.conf.Client.Proxy.Transfers {
 		transferIpPort := strings.Split(transfer.Dst, ":")
 		ip := transferIpPort[0]
@@ -163,95 +112,41 @@ func (client *Client) initTables() error {
 		if err != nil {
 			continue
 		}
-		dst := "127.0.0.1:" + strconv.Itoa(client.port)
 		if ip == "" {
-			// only port
-			infoO, infoE, err := nfw.IptablesRun(
-				nfw.OptionIptablesWait(),
-				nfw.OptionIptablesTable(nfw.IptablesTableNat),
-				nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
-				nfw.OptionIptablesChain(MsProxyChain),
-				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
-				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
-				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
-			)
-			if err == nil || (err != nil && IsErrChainExists(infoE)) {
-				continue
-			}
-			if err != nil && !IsErrChainNoMatch(infoE) {
-				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s",
-					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-				return err
-			}
-
-			infoO, infoE, err = nfw.IptablesRun(
-				nfw.OptionIptablesWait(),
-				nfw.OptionIptablesTable(nfw.IptablesTableNat),
-				nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
-				nfw.OptionIptablesChain(MsProxyChain),
-				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
-				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
-				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
-			)
+			// only port, check exist
+			exist, err := ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+				MatchProtocol(false, network.ProtocolIPv4).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Check()
 			if err != nil {
-				if IsErrChainExists(infoE) {
-					continue
-				}
-				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s",
-					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+				log.Errorf("client init tables, check dnat to dst err: %s", err)
 				return err
 			}
-
+			if !exist {
+				err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+					MatchProtocol(false, network.ProtocolIPv4).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Append()
+				if err != nil {
+					log.Errorf("client init tables, append dnat to dst err: %s", err)
+					return err
+				}
+			}
 		} else {
-			// both ip and port
-			infoO, infoE, err := nfw.IptablesRun(
-				nfw.OptionIptablesWait(),
-				nfw.OptionIptablesTable(nfw.IptablesTableNat),
-				nfw.OptionIptablesChainOperate(nfw.IptablesChainCheck),
-				nfw.OptionIptablesChain(MsProxyChain),
-				nfw.OptionIptablesIPv4DstIp(ip),
-				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
-				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
-				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
-			)
-			if err == nil || (err != nil && IsErrChainExists(infoE)) {
-				continue
-			}
-			if err != nil && !IsErrChainNoMatch(infoE) {
-				log.Errorf("Client::SetTables | check chain err: %s, infoO: %s, infoE: %s",
-					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-				return err
-			}
-
-			infoO, infoE, err = nfw.IptablesRun(
-				nfw.OptionIptablesWait(),
-				nfw.OptionIptablesTable(nfw.IptablesTableNat),
-				nfw.OptionIptablesChainOperate(nfw.IptablesChainAdd),
-				nfw.OptionIptablesChain(MsProxyChain),
-				nfw.OptionIptablesIPv4DstIp(ip),
-				nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-				nfw.OptionIptablesIPv4DstPort(uint32(port)),
-				nfw.OptionIptablesJump(nfw.IptablesTargetDNAT),
-				nfw.OptionIptablesJumpSubOptions("--to-destination", dst),
-				//nfw.OptionIptablesJump(nfw.IptablesTargetRedirect),
-				//nfw.OptionIptablesJumpSubOptions("--to-ports", strconv.Itoa(client.port)),
-			)
+			// both ip and port, check exist
+			exist, err := ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+				MatchProtocol(false, network.ProtocolIPv4).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Check()
 			if err != nil {
-				if IsErrChainExists(infoE) {
-					continue
-				}
-				log.Errorf("Client::SetTables | add on chain err: %s, infoO: %s, infoE: %s",
-					err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+				log.Errorf("client init tables, check dnat to dst err: %s", err)
 				return err
+			}
+			if !exist {
+				err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+					MatchProtocol(false, network.ProtocolIPv4).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Append()
+				if err != nil {
+					log.Errorf("client init tables, append dnat to dst err: %s", err)
+					return err
+				}
 			}
 		}
 	}
@@ -259,52 +154,41 @@ func (client *Client) initTables() error {
 }
 
 func (client *Client) finiTables() {
-	infoO, infoE, err := nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainDel),
-		nfw.OptionIptablesChain(nfw.IptablesChainOutput),
-		nfw.OptionIptablesIPv4Proto(nfw.IptablesIPv4Tcp),
-		nfw.OptionIptablesMatch("mark"),
-		nfw.OptionIptablesMatchSubOptions("--mark", "5053"),
-		nfw.OptionIptablesJump(nfw.IptablesTargetAccept),
-	)
+	ipt := iptables.NewIPTables()
+	// delete the mark
+	err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
+		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+		OptionWait(0).TargetAccept().Delete()
 	if err != nil {
-		log.Errorf("Client::finiTables | delete mark err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
-	}
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainFlush),
-		nfw.OptionIptablesChain(MsProxyChain),
-	)
-	if err != nil {
-		log.Errorf("Client::finiTables | flush chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+		log.Warnf("client fini tables, delete mark err: %s", err)
 	}
 
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainDel),
-		nfw.OptionIptablesChain(nfw.IptablesChainOutput),
-		nfw.OptionIptablesJump(MsProxyChain),
-	)
+	// flush conduit chain
+	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+		OptionWait(0).Flush()
 	if err != nil {
-		log.Errorf("Client::finiTables | del output chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+		log.Warnf("client fini tables, flush conduit chain err: %s", err)
 	}
 
-	infoO, infoE, err = nfw.IptablesRun(
-		nfw.OptionIptablesWait(),
-		nfw.OptionIptablesTable(nfw.IptablesTableNat),
-		nfw.OptionIptablesChainOperate(nfw.IptablesChainX),
-		nfw.OptionIptablesChain(MsProxyChain),
-	)
+	// delete jump conduit, NAT-PREROUTING
+	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).
+		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
 	if err != nil {
-		log.Errorf("Client::finiTables | del chain err: %s, infoO: %s, infoE: %s",
-			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+		log.Warnf("client fini tables, delete jump conduit chain err: %s", err)
+	}
+
+	// delete jump conduit, NAT-OUTPUT
+	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
+		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
+	if err != nil {
+		log.Warnf("client fini tables, delete jump conduit chain err: %s", err)
+	}
+
+	// delete conduit chain
+	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
+		OptionWait(0).Delete()
+	if err != nil {
+		log.Warnf("client fini tables, delete conduit chain err: %s", err)
 	}
 }
 
