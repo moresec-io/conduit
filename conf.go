@@ -9,10 +9,10 @@ package conduit
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
-	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/jumboframes/armorigo/log"
 
 	"github.com/natefinch/lumberjack"
 	"gopkg.in/yaml.v2"
@@ -99,7 +99,7 @@ func initCmd() error {
 }
 
 func initConf() error {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}

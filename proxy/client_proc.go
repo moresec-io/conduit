@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/jumboframes/armorigo/log"
 	nfw "github.com/moresec-io/conduit/pkg/nf_wrapper"
 )
 

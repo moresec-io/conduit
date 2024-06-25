@@ -13,7 +13,7 @@ package proxy
 import (
 	"syscall"
 
-	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/jumboframes/armorigo/log"
 
 	"golang.org/x/sys/unix"
 )

@@ -12,7 +12,7 @@ const (
 	ProxyModeMTls = "mtls"
 )
 
-type MSProxyProto struct {
+type ConduitProto struct {
 	SrcIp   string
 	SrcPort int
 	DstIp   string
