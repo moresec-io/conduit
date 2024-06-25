@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package conduit
@@ -9,10 +9,10 @@ package conduit
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
-	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/jumboframes/armorigo/log"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"gopkg.in/yaml.v2"
@@ -98,7 +98,7 @@ func initCmd() error {
 }
 
 func initConf() error {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}

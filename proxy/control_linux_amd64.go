@@ -4,7 +4,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 
@@ -13,7 +13,7 @@ package proxy
 import (
 	"syscall"
 
-	"github.com/moresec-io/conduit/pkg/log"
+	"github.com/jumboframes/armorigo/log"
 
 	"golang.org/x/sys/unix"
 )

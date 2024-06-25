@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package proxy
@@ -12,7 +12,7 @@ const (
 	ProxyModeMTls = "mtls"
 )
 
-type MSProxyProto struct {
+type ConduitProto struct {
 	SrcIp   string
 	SrcPort int
 	DstIp   string

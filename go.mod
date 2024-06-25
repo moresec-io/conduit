@@ -3,10 +3,8 @@ module github.com/moresec-io/conduit
 go 1.17
 
 require (
-	github.com/jumboframes/armorigo v0.4.1
+	github.com/jumboframes/armorigo v0.5.0-rc.1
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
-	github.com/xtaci/smux v1.5.16
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
 	gopkg.in/yaml.v2 v2.4.0
 )

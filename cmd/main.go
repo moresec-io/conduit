@@ -1,7 +1,7 @@
 /*
  * Apache License 2.0
  *
- * Copyright (c) 2022, Austin Zhai
+ * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
 package main
@@ -9,9 +9,9 @@ package main
 import (
 	"context"
 
+	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/sigaction"
 	"github.com/moresec-io/conduit"
-	"github.com/moresec-io/conduit/pkg/log"
 	"github.com/moresec-io/conduit/proxy"
 )
 
