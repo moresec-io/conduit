@@ -4,7 +4,7 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package proxy
+package server
 
 import (
 	"context"
@@ -20,11 +20,13 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
-	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/agent/config"
+	"github.com/moresec-io/conduit/pkg/agent/proto"
+	"github.com/moresec-io/conduit/pkg/agent/sys"
 )
 
 type Server struct {
-	conf *conduit.Config
+	conf *config.Config
 	rp   *rproxy.RProxy
 	// ca & certs
 	caPool *x509.CertPool
@@ -34,16 +36,16 @@ type Server struct {
 	listener net.Listener
 }
 
-func NewServer(conf *conduit.Config) (*Server, error) {
+func NewServer(conf *config.Config) (*Server, error) {
 	var err error
 	server := &Server{conf: conf}
 	switch conf.Server.Proxy.Mode {
-	case ProxyModeRaw:
+	case proto.ProxyModeRaw:
 		server.listener, err = net.Listen("tcp4", conf.Server.Proxy.Listen)
 		if err != nil {
 			return nil, err
 		}
-	case ProxyModeTls:
+	case proto.ProxyModeTls:
 		cert, err := tls.LoadX509KeyPair(conf.Server.Cert.CertFile,
 			conf.Server.Cert.KeyFile)
 		if err != nil {
@@ -56,7 +58,7 @@ func NewServer(conf *conduit.Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-	case ProxyModeMTls:
+	case proto.ProxyModeMTls:
 		ca, err := os.ReadFile(conf.Server.Cert.CaFile)
 		if err != nil {
 			return nil, err
@@ -118,7 +120,7 @@ func (server *Server) replaceDstfunc(conn net.Conn) (net.Addr, net.Conn, error) 
 		log.Errorf("Server::proxy | read meta err: %s", err)
 		return nil, nil, err
 	}
-	proto := &ConduitProto{}
+	proto := &proto.ConduitProto{}
 	err = json.Unmarshal(data, proto)
 	if err != nil {
 		conn.Close()
@@ -140,7 +142,7 @@ func (server *Server) dial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	timeout := time.Second * 10
 	dialer := net.Dialer{
 		Timeout: timeout,
-		Control: control,
+		Control: sys.Control,
 	}
 	return dialer.Dial("tcp", dst.String())
 }
