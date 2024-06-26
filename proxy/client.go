@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	MsProxyChain = "MS_PROXY"
+	ConduitChain = "CONDUIT"
 )
 
 type Client struct {

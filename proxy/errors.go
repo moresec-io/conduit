@@ -18,22 +18,22 @@ var (
 	ErrUnsupportedLocalMode = errors.New("unsupported local mode")
 )
 
-func IsErrChainExists(err []byte) bool {
-	if strings.Contains(string(err), ErrChainExists.Error()) {
+func IsErrChainExists(err string) bool {
+	if strings.Contains(err, ErrChainExists.Error()) {
 		return true
 	}
 	return false
 }
 
-func IsErrChainNoMatch(err []byte) bool {
-	if strings.Contains(string(err), ErrChainNoMatch.Error()) {
+func IsErrChainNoMatch(err string) bool {
+	if strings.Contains(err, ErrChainNoMatch.Error()) {
 		return true
 	}
 	return false
 }
 
-func IsErrBadRule(err []byte) bool {
-	if strings.Contains(string(err), ErrBadRule.Error()) {
+func IsErrBadRule(err string) bool {
+	if strings.Contains(err, ErrBadRule.Error()) {
 		return true
 	}
 	return false
