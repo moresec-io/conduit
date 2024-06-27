@@ -4,7 +4,7 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package proxy
+package client
 
 import (
 	"net"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/agent/errors"
 	xtables "github.com/singchia/go-xtables"
 	"github.com/singchia/go-xtables/iptables"
 	"github.com/singchia/go-xtables/pkg/network"
@@ -65,7 +66,7 @@ func (client *Client) initTables() error {
 	err = ipt.Table(iptables.TableTypeNat).OptionWait(0).NewChain(ConduitChain)
 	if err != nil {
 		ce, ok := err.(*xtables.CommandError)
-		if !ok || !IsErrChainExists(ce.Message) {
+		if !ok || !errors.IsErrChainExists(ce.Message) {
 			log.Errorf("client init tables, create conduit chain err: %s", err)
 			return err
 		}

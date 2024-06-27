@@ -8,10 +8,10 @@
  * All rights reserved.
  */
 
-package proxy
+package sys
 
 import "syscall"
 
-func control(network, address string, conn syscall.RawConn) error {
+func Control(network, address string, conn syscall.RawConn) error {
 	return nil
 }

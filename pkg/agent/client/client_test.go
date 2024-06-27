@@ -4,16 +4,16 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package proxy
+package client
 
 import (
 	"testing"
 
-	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/agent/config"
 )
 
 func TestSetTables(t *testing.T) {
-	conf := &conduit.Config{}
+	conf := &config.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`
@@ -32,7 +32,7 @@ func TestSetTables(t *testing.T) {
 }
 
 func TestUnSetTables(t *testing.T) {
-	conf := &conduit.Config{}
+	conf := &config.Config{}
 	conf.Client.Proxy.Transfers = make([]struct {
 		Dst   string `yaml:"dst"`
 		Proxy string `yaml:"proxy"`

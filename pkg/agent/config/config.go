@@ -4,7 +4,7 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package conduit
+package config
 
 import (
 	"flag"

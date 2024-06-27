@@ -4,7 +4,7 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package proxy
+package client
 
 import (
 	"context"
@@ -20,7 +20,9 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
-	"github.com/moresec-io/conduit"
+	"github.com/moresec-io/conduit/pkg/agent/config"
+	"github.com/moresec-io/conduit/pkg/agent/proto"
+	"github.com/moresec-io/conduit/pkg/agent/sys"
 	"github.com/moresec-io/conduit/pkg/tproxy"
 )
 
@@ -29,7 +31,7 @@ const (
 )
 
 type Client struct {
-	conf  *conduit.Config
+	conf  *config.Config
 	rp    *rproxy.RProxy
 	certs []tls.Certificate
 	quit  chan struct{}
@@ -37,12 +39,12 @@ type Client struct {
 	port int
 }
 
-func NewClient(conf *conduit.Config) (*Client, error) {
+func NewClient(conf *config.Config) (*Client, error) {
 	client := &Client{
 		conf: conf,
 		quit: make(chan struct{}),
 	}
-	if conf.Client.Proxy.Mode == ProxyModeMTls {
+	if conf.Client.Proxy.Mode == proto.ProxyModeMTls {
 		cert, err := tls.LoadX509KeyPair(conf.Client.Cert.CertFile,
 			conf.Client.Cert.KeyFile)
 		if err != nil {
@@ -168,11 +170,11 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
 	switch client.conf.Client.Proxy.Mode {
-	case ProxyModeRaw:
+	case proto.ProxyModeRaw:
 		return client.rawDial(dst, ctx)
-	case ProxyModeTls:
+	case proto.ProxyModeTls:
 		return client.tlsDial(dst, ctx)
-	case ProxyModeMTls:
+	case proto.ProxyModeMTls:
 		return client.mtlsDial(dst, ctx)
 	default:
 		return nil, errors.New("unsupported proxy mode")
@@ -196,7 +198,7 @@ func (client *Client) tlsDial(dst net.Addr, ctx *ctx) (net.Conn, error) {
 	timeout := client.conf.Client.Proxy.Timeout
 	dialer := net.Dialer{
 		Timeout: time.Duration(timeout) * time.Second,
-		Control: control,
+		Control: sys.Control,
 	}
 	log.Debugf("Client::tlsDial | dst: %s, proxy: %s", dst.String(), ctx.proxy)
 	conn, err := tls.DialWithDialer(&dialer, "tcp4",
@@ -213,7 +215,7 @@ func (client *Client) mtlsDial(dst net.Addr, ctx *ctx) (net.Conn, error) {
 	timeout := client.conf.Client.Proxy.Timeout
 	dialer := net.Dialer{
 		Timeout: time.Duration(timeout) * time.Second,
-		Control: control,
+		Control: sys.Control,
 	}
 	log.Debugf("Client::mtlsDial | dst: %s, proxy: %s", dst.String(), ctx.proxy)
 	conn, err := tls.DialWithDialer(&dialer, "tcp4",
@@ -233,7 +235,7 @@ func (client *Client) tproxyPostDial(custom interface{}) error {
 
 func (client *Client) tproxyPreWrite(writer io.Writer, custom interface{}) error {
 	ctx := custom.(*ctx)
-	proto := &ConduitProto{
+	proto := &proto.ConduitProto{
 		SrcIp:   ctx.srcIp,
 		SrcPort: ctx.srcPort,
 		DstIp:   ctx.dstIp,

@@ -4,7 +4,7 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package proxy
+package errors
 
 import (
 	"errors"

@@ -8,7 +8,7 @@
  * All rights reserved.
  */
 
-package proxy
+package sys
 
 import (
 	"syscall"
@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func control(network, address string, conn syscall.RawConn) error {
+func Control(network, address string, conn syscall.RawConn) error {
 	var operr, err error
 	err = conn.Control(func(fd uintptr) {
 		operr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
