@@ -19,6 +19,7 @@ func main() {
 	if err != nil {
 		return
 	}
+	agent.Run()
 
 	sig := sigaction.NewSignal()
 	sig.Wait(context.TODO())

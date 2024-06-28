@@ -14,10 +14,6 @@ type Agent struct {
 }
 
 func NewAgent() (*Agent, error) {
-	log.Infof(`
-==================================================
-                CONDUIT AGENT STARTS
-==================================================`)
 	var (
 		cli *client.Client
 		srv *server.Server
@@ -28,6 +24,11 @@ func NewAgent() (*Agent, error) {
 		log.Fatalf("init config err: %s", err)
 		return nil, err
 	}
+	log.Infof(`
+==================================================
+                CONDUIT AGENT STARTS
+==================================================`)
+
 	conf := config.Conf
 
 	if conf.Client.Enable {

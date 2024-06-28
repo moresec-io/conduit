@@ -27,7 +27,9 @@ import (
 )
 
 const (
-	ConduitChain = "CONDUIT"
+	ConduitChain       = "CONDUIT"
+	ConduitIPSetPort   = "CONDUIT_PORT"
+	ConduitIPSetIPPort = "CONDUIT_IPPORT"
 )
 
 type Client struct {
@@ -105,7 +107,7 @@ func (client *Client) proxy() error {
 func (client *Client) Close() {
 	client.rp.Close()
 	close(client.quit)
-	client.finiTables()
+	client.finiTables("client fini tables")
 }
 
 type ctx struct {

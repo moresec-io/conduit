@@ -20,7 +20,7 @@ import (
 )
 
 func (client *Client) setTables() error {
-	client.finiTables()
+	client.finiTables("flush tables before init")
 	err := client.initTables()
 	if err != nil {
 		return err
@@ -49,7 +49,7 @@ func (client *Client) initTables() error {
 		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
 		OptionWait(0).TargetAccept().Check()
 	if err != nil {
-		log.Errorf("client init tables, check mark err: %s", err)
+		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
 	if !exist {
@@ -57,7 +57,7 @@ func (client *Client) initTables() error {
 			MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
 			OptionWait(0).TargetAccept().Insert()
 		if err != nil {
-			log.Errorf("client init tables, insert mark err: %s", err)
+			log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
 	}
@@ -67,7 +67,7 @@ func (client *Client) initTables() error {
 	if err != nil {
 		ce, ok := err.(*xtables.CommandError)
 		if !ok || !errors.IsErrChainExists(ce.Message) {
-			log.Errorf("client init tables, create conduit chain err: %s", err)
+			log.Errorf("client init tables, create conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
 	}
@@ -76,14 +76,14 @@ func (client *Client) initTables() error {
 	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
 		OptionWait(0).TargetJumpChain(ConduitChain).Check()
 	if err != nil {
-		log.Errorf("client init tables, check jump conduit chain err: %s", err)
+		log.Errorf("client init tables, check jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
 	if !exist {
 		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
 			OptionWait(0).TargetJumpChain(ConduitChain).Append()
 		if err != nil {
-			log.Errorf("client init tables, add jump conduit chain err: %s", err)
+			log.Errorf("client init tables, add jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		}
 	}
 
@@ -92,7 +92,7 @@ func (client *Client) initTables() error {
 	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
 		OptionWait(0).TargetJumpChain(ConduitChain).Check()
 	if err != nil {
-		log.Errorf("client init tables, check jump conduit chain err: %s", err)
+		log.Errorf("client init tables, check jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
 	if !exist {
@@ -100,10 +100,13 @@ func (client *Client) initTables() error {
 		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
 			OptionWait(0).TargetJumpChain(ConduitChain).Append()
 		if err != nil {
-			log.Errorf("client init tables, add jump conduit chain err: %s", err)
+			log.Errorf("client init tables, add jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
 	}
+
+	userDefined := iptables.ChainTypeUserDefined
+	userDefined.SetName(ConduitChain)
 
 	// do real maps
 	for _, transfer := range client.conf.Client.Proxy.Transfers {
@@ -115,37 +118,37 @@ func (client *Client) initTables() error {
 		}
 		if ip == "" {
 			// only port, check exist
-			exist, err := ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
-				MatchProtocol(false, network.ProtocolIPv4).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Check()
+			exist, err := ipt.Table(iptables.TableTypeNat).Chain(userDefined).
+				MatchProtocol(false, network.ProtocolTCP).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
 			if err != nil {
-				log.Errorf("client init tables, check dnat to dst err: %s", err)
+				log.Errorf("client init tables, check dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
 				return err
 			}
 			if !exist {
-				err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
-					MatchProtocol(false, network.ProtocolIPv4).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Append()
+				err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).
+					MatchProtocol(false, network.ProtocolTCP).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
 				if err != nil {
-					log.Errorf("client init tables, append dnat to dst err: %s", err)
+					log.Errorf("client init tables, append dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
 					return err
 				}
 			}
 		} else {
 			// both ip and port, check exist
-			exist, err := ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
-				MatchProtocol(false, network.ProtocolIPv4).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Check()
+			exist, err := ipt.Table(iptables.TableTypeNat).Chain(userDefined).
+				MatchProtocol(false, network.ProtocolTCP).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
 			if err != nil {
-				log.Errorf("client init tables, check dnat to dst err: %s", err)
+				log.Errorf("client init tables, check dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
 				return err
 			}
 			if !exist {
-				err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
-					MatchProtocol(false, network.ProtocolIPv4).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), port)).Append()
+				err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).
+					MatchProtocol(false, network.ProtocolTCP).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
 				if err != nil {
-					log.Errorf("client init tables, append dnat to dst err: %s", err)
+					log.Errorf("client init tables, append dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
 					return err
 				}
 			}
@@ -154,42 +157,42 @@ func (client *Client) initTables() error {
 	return nil
 }
 
-func (client *Client) finiTables() {
+func (client *Client) finiTables(prefix string) {
 	ipt := iptables.NewIPTables()
 	// delete the mark
 	err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
 		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
 		OptionWait(0).TargetAccept().Delete()
 	if err != nil {
-		log.Warnf("client fini tables, delete mark err: %s", err)
+		log.Debugf("%s, delete mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// flush conduit chain
 	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
 		OptionWait(0).Flush()
 	if err != nil {
-		log.Warnf("client fini tables, flush conduit chain err: %s", err)
+		log.Debugf("%s, flush conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// delete jump conduit, NAT-PREROUTING
 	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).
 		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
 	if err != nil {
-		log.Warnf("client fini tables, delete jump conduit chain err: %s", err)
+		log.Debugf("%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// delete jump conduit, NAT-OUTPUT
 	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
 		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
 	if err != nil {
-		log.Warnf("client fini tables, delete jump conduit chain err: %s", err)
+		log.Debugf("%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// delete conduit chain
 	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
 		OptionWait(0).Delete()
 	if err != nil {
-		log.Warnf("client fini tables, delete conduit chain err: %s", err)
+		log.Debugf("%s, delete conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 }
 
