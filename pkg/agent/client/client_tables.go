@@ -108,6 +108,43 @@ func (client *Client) initTables() error {
 	userDefined := iptables.ChainTypeUserDefined
 	userDefined.SetName(ConduitChain)
 
+	// dnat port
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
+	if err != nil {
+		log.Errorf("client init tables, check port dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+		return err
+	}
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
+			TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
+		if err != nil {
+			log.Errorf("client init tables, append port dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			return err
+		}
+	}
+
+	// dnat ip port
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
+	if err != nil {
+		log.Errorf("client init tables, check ipport dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+		return err
+	}
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
+			TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
+		if err != nil {
+			log.Errorf("client init tables, append ipport dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			return err
+		}
+	}
+	return nil
+
 	// do real maps
 	for _, transfer := range client.conf.Client.Proxy.Transfers {
 		transferIpPort := strings.Split(transfer.Dst, ":")
@@ -165,6 +202,24 @@ func (client *Client) finiTables(prefix string) {
 		OptionWait(0).TargetAccept().Delete()
 	if err != nil {
 		log.Debugf("%s, delete mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+	}
+
+	// delete dnats
+	userDefined := iptables.ChainTypeUserDefined
+	userDefined.SetName(ConduitChain)
+
+	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
+	if err != nil {
+		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+	}
+
+	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
+	if err != nil {
+		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// flush conduit chain

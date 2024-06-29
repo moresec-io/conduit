@@ -71,6 +71,10 @@ func (client *Client) Work() error {
 	if err != nil {
 		return err
 	}
+	err = client.setIPSet()
+	if err != nil {
+		return err
+	}
 
 	err = client.setTables()
 	if err != nil {
@@ -81,7 +85,35 @@ func (client *Client) Work() error {
 	if err != nil {
 		return err
 	}
-	return err
+
+	err = client.setStaticMaps()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (client *Client) setStaticMaps() error {
+	for _, transfer := range client.conf.Client.Proxy.Transfers {
+		transferIpPort := strings.Split(transfer.Dst, ":")
+		ip := transferIpPort[0]
+		port, err := strconv.Atoi(transferIpPort[1])
+		if err != nil {
+			return err
+		}
+		if ip == "" {
+			err = client.addIPSetPort(uint16(port))
+			if err != nil {
+				return err
+			}
+		} else {
+			err = client.addIPSetIPPort(net.ParseIP(ip), uint16(port))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (client *Client) proxy() error {
@@ -108,6 +140,7 @@ func (client *Client) Close() {
 	client.rp.Close()
 	close(client.quit)
 	client.finiTables("client fini tables")
+	client.finiIPSet("client fini ipset")
 }
 
 type ctx struct {
