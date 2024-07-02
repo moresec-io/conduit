@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Moresec Inc.
+ * All rights reserved.
+ */
 package agent
 
 import (

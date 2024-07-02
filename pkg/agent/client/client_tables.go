@@ -8,7 +8,6 @@ package client
 
 import (
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -141,54 +140,6 @@ func (client *Client) initTables() error {
 		if err != nil {
 			log.Errorf("client init tables, append ipport dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
-		}
-	}
-	return nil
-
-	// do real maps
-	for _, transfer := range client.conf.Client.Proxy.Transfers {
-		transferIpPort := strings.Split(transfer.Dst, ":")
-		ip := transferIpPort[0]
-		port, err := strconv.Atoi(transferIpPort[1])
-		if err != nil {
-			continue
-		}
-		if ip == "" {
-			// only port, check exist
-			exist, err := ipt.Table(iptables.TableTypeNat).Chain(userDefined).
-				MatchProtocol(false, network.ProtocolTCP).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
-			if err != nil {
-				log.Errorf("client init tables, check dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
-				return err
-			}
-			if !exist {
-				err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).
-					MatchProtocol(false, network.ProtocolTCP).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
-				if err != nil {
-					log.Errorf("client init tables, append dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
-					return err
-				}
-			}
-		} else {
-			// both ip and port, check exist
-			exist, err := ipt.Table(iptables.TableTypeNat).Chain(userDefined).
-				MatchProtocol(false, network.ProtocolTCP).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-				OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
-			if err != nil {
-				log.Errorf("client init tables, check dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
-				return err
-			}
-			if !exist {
-				err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).
-					MatchProtocol(false, network.ProtocolTCP).MatchDestination(false, ip).MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
-					OptionWait(0).TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
-				if err != nil {
-					log.Errorf("client init tables, append dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
-					return err
-				}
-			}
 		}
 	}
 	return nil
