@@ -26,7 +26,7 @@ func (client *Client) setProc() error {
 			case <-tick.C:
 				err = client.initProc()
 				if err != nil {
-					log.Errorf("Client::setProc | init proc err: %s", err)
+					log.Errorf("client set proc, init proc err: %s", err)
 				}
 			case <-client.quit:
 				return
@@ -40,11 +40,11 @@ func (client *Client) setProc() error {
 func (client *Client) initProc() error {
 	infoO, infoE, err := sh.Cmd("bash", "-c", "echo 1 > /proc/sys/net/ipv4/conf/all/route_localnet")
 	if err != nil {
-		log.Errorf("client::initProc | enable route local net err: %s, stdout: %s, stderr: %s",
+		log.Errorf("client init proc, enable route local net err: %s, stdout: %s, stderr: %s",
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
-	log.Debugf("client::initProc | enable route local net success, stdout: %s, stderr: %s",
+	log.Debugf("client init proc, enable route local net success, stdout: %s, stderr: %s",
 		infoO, strings.TrimSuffix(string(infoE), "\n"))
 	return nil
 }

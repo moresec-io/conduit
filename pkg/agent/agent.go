@@ -1,3 +1,9 @@
+/*
+ * Apache License 2.0
+ *
+ * Copyright (c) 2022, Moresec Inc.
+ * All rights reserved.
+ */
 package agent
 
 import (
@@ -14,10 +20,6 @@ type Agent struct {
 }
 
 func NewAgent() (*Agent, error) {
-	log.Infof(`
-==================================================
-                CONDUIT AGENT STARTS
-==================================================`)
 	var (
 		cli *client.Client
 		srv *server.Server
@@ -28,6 +30,11 @@ func NewAgent() (*Agent, error) {
 		log.Fatalf("init config err: %s", err)
 		return nil, err
 	}
+	log.Infof(`
+==================================================
+                CONDUIT AGENT STARTS
+==================================================`)
+
 	conf := config.Conf
 
 	if conf.Client.Enable {

@@ -47,5 +47,5 @@ func TestUnSetTables(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	client.finiTables()
+	client.finiTables("client fini tables")
 }
