@@ -4,57 +4,30 @@ import (
 	"net"
 
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 )
 
-type Network struct {
-	Gateway      net.IPNet
-	GatewayIndex int
-	SubIPs       []net.IP
-}
+func ListNetworks() ([]net.IPNet, error) {
+	ipNets := []net.IPNet{}
 
-type IPs []net.IP
-
-func ListNetworks() error {
-	ips := IPs{}
-	networkMap := map[int]*Network{}
-
-	pids, err := ListDifferentNetNamespacePids()
+	handle, err := netlink.NewHandle()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, pid := range pids {
-		nshandler, err := netns.GetFromPid(pid)
-		if err != nil {
+	links, err := handle.LinkList()
+	if err != nil {
+		return nil, err
+	}
+	for _, link := range links {
+		if link.Attrs().Name == "lo" {
 			continue
 		}
-		handle, err := netlink.NewHandleAt(nshandler)
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		links, err := handle.LinkList()
-		if err != nil {
-			return err
-		}
-		for _, link := range links {
-			if _, isBridge := link.(*netlink.Bridge); isBridge {
-				if pid == 1 {
-					// default namespace, add to network
-				}
-			} else if _, isDevice := link.(*netlink.Device); isDevice {
-				masterIndex := link.Attrs().MasterIndex
-				if masterIndex == 0 {
-					// standalone, no master
-				} else {
-					link, err := netlink.LinkByIndex(masterIndex)
-					if err != nil {
-						continue
-					}
-					if _, isBridge := link.(*netlink.Bridge); isBridge {
-					}
-				}
-			}
+		for _, addr := range addrs {
+			ipNets = append(ipNets, *addr.IPNet)
 		}
 	}
-	return nil
+	return ipNets, nil
 }
