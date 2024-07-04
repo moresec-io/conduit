@@ -27,7 +27,39 @@ var (
 	defaultFile string = "./conduit.yaml"
 )
 
+type CertKey struct {
+	Cert string `yaml:"cert" json:"cert"`
+	Key  string `yaml:"key" json:"key"`
+}
+
+type TLS struct {
+	Enable             bool      `yaml:"enable" json:"enable"`
+	MTLS               bool      `yaml:"mtls" json:"mtls"`
+	CACerts            []string  `yaml:"ca_certs" json:"ca_certs"`                         // ca certs paths
+	Certs              []CertKey `yaml:"certs" json:"certs"`                               // certs paths
+	InsecureSkipVerify bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
+}
+
+type Listen struct {
+	Network        string `yaml:"network" json:"network"`
+	Addr           string `yaml:"addr" json:"addr"`
+	AdvertisedAddr string `yaml:"advertised_addr,omitempty" json:"advertised_addr"`
+	TLS            TLS    `yaml:"tls,omitempty" json:"tls"`
+}
+
+type Dial struct {
+	Network        string   `yaml:"network" json:"network"`
+	Addrs          []string `yaml:"addrs" json:"addrs"`
+	AdvertisedAddr string   `yaml:"advertised_addr,omitempty" json:"advertised_addr"`
+	TLS            TLS      `yaml:"tls,omitempty" json:"tls"`
+}
+
 type Config struct {
+	Conduit struct {
+		Enable bool `yaml:"enable"`
+		Dial   Dial `yaml:"dial"`
+	} `yaml:"conduit"`
+
 	Server struct {
 		Enable bool `yaml:"enable"`
 		Proxy  struct {
@@ -45,13 +77,13 @@ type Config struct {
 		Enable bool `yaml:"enable"`
 		Proxy  struct {
 			Mode      string     `yaml:"mode"`
-			LocalMode string     `yaml:"local_mode"`
 			Listen    string     `yaml:"listen"` // for transparent
 			CheckTime int        `yaml:"check_time"`
 			Transfers []struct { // dstA -> B -> dstC
 				Dst   string `yaml:"dst"`    // :9092
 				Proxy string `yaml:"proxy"`  // 192.168.111.149
 				DstTo string `yaml:"dst_to"` // 127.0.0.1:9092
+				TLS   TLS    `yaml:"tls"`
 			} `yaml:"transfers"`
 			Timeout    int `yaml:"timeout"`
 			ServerPort int `yaml:"server_port"`
