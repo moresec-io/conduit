@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
-	sh "github.com/moresec-io/conduit/pkg/shell"
+	"github.com/moresec-io/conduit/pkg/utils"
 )
 
 func (client *Client) setProc() error {
@@ -20,7 +20,7 @@ func (client *Client) setProc() error {
 		return err
 	}
 	go func() {
-		tick := time.NewTicker(time.Duration(client.conf.Client.Proxy.CheckTime) * time.Second)
+		tick := time.NewTicker(time.Duration(client.conf.Client.CheckTime) * time.Second)
 		for {
 			select {
 			case <-tick.C:
@@ -38,7 +38,7 @@ func (client *Client) setProc() error {
 }
 
 func (client *Client) initProc() error {
-	infoO, infoE, err := sh.Cmd("bash", "-c", "echo 1 > /proc/sys/net/ipv4/conf/all/route_localnet")
+	infoO, infoE, err := utils.Cmd("bash", "-c", "echo 1 > /proc/sys/net/ipv4/conf/all/route_localnet")
 	if err != nil {
 		log.Errorf("client init proc, enable route local net err: %s, stdout: %s, stderr: %s",
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))

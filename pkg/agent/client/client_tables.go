@@ -7,7 +7,6 @@
 package client
 
 import (
-	"net"
 	"strings"
 	"time"
 
@@ -25,13 +24,13 @@ func (client *Client) setTables() error {
 		return err
 	}
 	go func() {
-		tick := time.NewTicker(time.Duration(client.conf.Client.Proxy.CheckTime) * time.Second)
+		tick := time.NewTicker(time.Duration(client.conf.Client.CheckTime) * time.Second)
 		for {
 			select {
 			case <-tick.C:
 				err = client.initTables()
 				if err != nil {
-					log.Errorf("Client::setTables | init tables err: %s", err)
+					log.Errorf("client set tables, init tables err: %s", err)
 				}
 			case <-client.quit:
 				return
@@ -200,19 +199,4 @@ func (client *Client) finiTables(prefix string) {
 	if err != nil {
 		log.Debugf("%s, delete conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
-}
-
-func localBridges() []string {
-	bridges := []string{}
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return bridges
-	}
-
-	for _, iface := range ifaces {
-		if strings.Contains(iface.Name, "br-") {
-			bridges = append(bridges, iface.Name)
-		}
-	}
-	return bridges
 }

@@ -8,7 +8,6 @@ package client
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -16,14 +15,14 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
 	"github.com/moresec-io/conduit/pkg/agent/config"
 	"github.com/moresec-io/conduit/pkg/agent/proto"
-	"github.com/moresec-io/conduit/pkg/agent/sys"
+	gconfig "github.com/moresec-io/conduit/pkg/config"
 	"github.com/moresec-io/conduit/pkg/tproxy"
+	"github.com/moresec-io/conduit/pkg/utils"
 )
 
 const (
@@ -33,10 +32,9 @@ const (
 )
 
 type Client struct {
-	conf  *config.Config
-	rp    *rproxy.RProxy
-	certs []tls.Certificate
-	quit  chan struct{}
+	conf *config.Config
+	rp   *rproxy.RProxy
+	quit chan struct{}
 	// listen port
 	port int
 }
@@ -46,15 +44,7 @@ func NewClient(conf *config.Config) (*Client, error) {
 		conf: conf,
 		quit: make(chan struct{}),
 	}
-	if conf.Client.Proxy.Mode == proto.ProxyModeMTls {
-		cert, err := tls.LoadX509KeyPair(conf.Client.Cert.CertFile,
-			conf.Client.Cert.KeyFile)
-		if err != nil {
-			return nil, err
-		}
-		client.certs = []tls.Certificate{cert}
-	}
-	ipPort := strings.Split(conf.Client.Proxy.Listen, ":")
+	ipPort := strings.Split(conf.Client.Listen, ":")
 	if len(ipPort) != 2 {
 		return nil, errors.New("illegal client listen addr")
 	}
@@ -86,16 +76,16 @@ func (client *Client) Work() error {
 		return err
 	}
 
-	err = client.setStaticMaps()
+	err = client.setStaticPolicies()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (client *Client) setStaticMaps() error {
-	for _, transfer := range client.conf.Client.Proxy.Transfers {
-		transferIpPort := strings.Split(transfer.Dst, ":")
+func (client *Client) setStaticPolicies() error {
+	for _, policy := range client.conf.Client.Policies {
+		transferIpPort := strings.Split(policy.Dst, ":")
 		ip := transferIpPort[0]
 		port, err := strconv.Atoi(transferIpPort[1])
 		if err != nil {
@@ -117,7 +107,7 @@ func (client *Client) setStaticMaps() error {
 }
 
 func (client *Client) proxy() error {
-	listener, err := net.Listen("tcp4", client.conf.Client.Proxy.Listen)
+	listener, err := net.Listen("tcp4", client.conf.Client.Listen)
 	if err != nil {
 		return err
 	}
@@ -144,29 +134,29 @@ func (client *Client) Close() {
 }
 
 type ctx struct {
-	srcIp   string //源ip
-	srcPort int    //源port
-	dstIp   string //原始目的ip
-	dstPort int    //原始目的port
-	proxy   string //代理
-	dst     string // 代理后地址
+	srcIp   string        //源ip
+	srcPort int           //源port
+	dstIp   string        //原始目的ip
+	dstPort int           //原始目的port
+	dial    *gconfig.Dial // proxy
+	dst     string        // 代理后地址
 }
 
 func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
-	log.Debugf("Client::tproxyPostAccept | src: %s, dst: %s", src.String(), dst.String())
+	log.Debugf("client tproxy post accept, src: %s, dst: %s", src.String(), dst.String())
 
 	ipPort := strings.Split(src.String(), ":")
 	srcIp := ipPort[0]
 	srcPort, err := strconv.Atoi(ipPort[1])
 	if err != nil {
-		log.Errorf("Client::tproxyPostAccept | src port to int err: %s", err)
+		log.Errorf("client tproxy post accept, src port to int err: %s", err)
 		return nil, err
 	}
 	ipPort = strings.Split(dst.String(), ":")
 	dstIp := ipPort[0]
 	dstPort, err := strconv.Atoi(ipPort[1])
 	if err != nil {
-		log.Errorf("Client::tproxyPostAccept | dst port to int err: %s", err)
+		log.Errorf("client tproxy post accept, dst port to int err: %s", err)
 		return nil, err
 	}
 
@@ -175,20 +165,25 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		srcPort: srcPort,
 		dstIp:   dstIp,
 		dstPort: dstPort,
-		proxy:   dstIp + ":" + strconv.Itoa(client.conf.Client.Proxy.ServerPort),
-		dst:     dstIp + ":" + strconv.Itoa(dstPort),
+		dial: &gconfig.Dial{
+			Network: client.conf.Client.DefaultProxy.Network,
+			Addrs: []string{
+				dstIp + ":" + strconv.Itoa(client.conf.Client.DefaultProxy.ServerPort),
+			},
+			TLS: client.conf.Client.DefaultProxy.TLS,
+		},
+		dst: dstIp + ":" + strconv.Itoa(dstPort),
 	}
-	for _, transfer := range client.conf.Client.Proxy.Transfers {
-		transferIpPort := strings.Split(transfer.Dst, ":")
+	for _, policy := range client.conf.Client.Policies {
+		transferIpPort := strings.Split(policy.Dst, ":")
 		if transferIpPort[0] == "" || transferIpPort[0] == dstIp {
 			if transferIpPort[1] == ipPort[1] {
 				// match
-				if transfer.Proxy != "" {
-					ctx.proxy = transfer.Proxy + ":" +
-						strconv.Itoa(client.conf.Client.Proxy.ServerPort)
+				if policy.Proxy != nil {
+					ctx.dial = policy.Proxy
 				}
-				if transfer.DstTo != "" {
-					ctx.dst = transfer.DstTo
+				if policy.DstTo != "" {
+					ctx.dst = policy.DstTo
 				}
 				break
 			}
@@ -204,63 +199,7 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
-	switch client.conf.Client.Proxy.Mode {
-	case proto.ProxyModeRaw:
-		return client.rawDial(dst, ctx)
-	case proto.ProxyModeTls:
-		return client.tlsDial(dst, ctx)
-	case proto.ProxyModeMTls:
-		return client.mtlsDial(dst, ctx)
-	default:
-		return nil, errors.New("unsupported proxy mode")
-	}
-}
-
-func (client *Client) rawDial(dst net.Addr, ctx *ctx) (net.Conn, error) {
-	timeout := client.conf.Client.Proxy.Timeout
-	log.Debugf("Client::rawDial | dst: %s, proxy: %s", dst, ctx.proxy)
-	conn, err := net.DialTimeout("tcp4",
-		ctx.proxy,
-		time.Duration(timeout)*time.Second)
-	if err != nil {
-		log.Errorf("Client::rawDial | dst: %s, proxy: %s, err: %s", dst.String(), ctx.proxy, err)
-		return nil, err
-	}
-	return conn, nil
-}
-
-func (client *Client) tlsDial(dst net.Addr, ctx *ctx) (net.Conn, error) {
-	timeout := client.conf.Client.Proxy.Timeout
-	dialer := net.Dialer{
-		Timeout: time.Duration(timeout) * time.Second,
-		Control: sys.Control,
-	}
-	log.Debugf("Client::tlsDial | dst: %s, proxy: %s", dst.String(), ctx.proxy)
-	conn, err := tls.DialWithDialer(&dialer, "tcp4",
-		ctx.proxy,
-		&tls.Config{InsecureSkipVerify: true})
-	if err != nil {
-		log.Errorf("Client::tlsDial | dst: %s, proxy: %s, err: %s", dst.String(), ctx.proxy, err)
-		return nil, err
-	}
-	return conn, nil
-}
-
-func (client *Client) mtlsDial(dst net.Addr, ctx *ctx) (net.Conn, error) {
-	timeout := client.conf.Client.Proxy.Timeout
-	dialer := net.Dialer{
-		Timeout: time.Duration(timeout) * time.Second,
-		Control: sys.Control,
-	}
-	log.Debugf("Client::mtlsDial | dst: %s, proxy: %s", dst.String(), ctx.proxy)
-	conn, err := tls.DialWithDialer(&dialer, "tcp4",
-		ctx.proxy,
-		&tls.Config{InsecureSkipVerify: true, Certificates: client.certs})
-	if err != nil {
-		log.Errorf("Client::mtlsDial | dst: %s, proxy: %s, err: %s", dst.String(), ctx.proxy, err)
-		return nil, err
-	}
-	return conn, nil
+	return utils.DialRandom(ctx.dial)
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {
@@ -275,7 +214,6 @@ func (client *Client) tproxyPreWrite(writer io.Writer, custom interface{}) error
 		SrcPort: ctx.srcPort,
 		DstIp:   ctx.dstIp,
 		DstPort: ctx.dstPort,
-		Proxy:   ctx.proxy,
 		Dst:     ctx.dst,
 	}
 	data, err := json.Marshal(proto)

@@ -6,17 +6,10 @@
  */
 package proto
 
-const (
-	ProxyModeRaw  = "raw"
-	ProxyModeTls  = "tls"
-	ProxyModeMTls = "mtls"
-)
-
 type ConduitProto struct {
 	SrcIp   string
 	SrcPort int
 	DstIp   string
 	DstPort int
-	Proxy   string
 	Dst     string
 }

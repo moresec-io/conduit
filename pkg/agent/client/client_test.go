@@ -14,14 +14,10 @@ import (
 
 func TestSetTables(t *testing.T) {
 	conf := &config.Config{}
-	conf.Client.Proxy.Transfers = make([]struct {
-		Dst   string `yaml:"dst"`
-		Proxy string `yaml:"proxy"`
-		DstTo string `yaml:"dst_to"`
-	}, 1)
-	conf.Client.Proxy.Transfers[0].Dst = ":9092"
-	conf.Client.Proxy.Listen = "127.0.0.1:5052" // client
-	t.Log(conf.Client.Proxy.Transfers[0].Dst)
+	conf.Client.Policies = make([]config.Policy, 1)
+	conf.Client.Policies[0].Dst = ":9092"
+	conf.Client.Listen = "127.0.0.1:5052" // client
+	t.Log(conf.Client.Policies[0].Dst)
 
 	client, err := NewClient(conf)
 	if err != nil {
@@ -33,14 +29,10 @@ func TestSetTables(t *testing.T) {
 
 func TestUnSetTables(t *testing.T) {
 	conf := &config.Config{}
-	conf.Client.Proxy.Transfers = make([]struct {
-		Dst   string `yaml:"dst"`
-		Proxy string `yaml:"proxy"`
-		DstTo string `yaml:"dst_to"`
-	}, 1)
-	conf.Client.Proxy.Transfers[0].Dst = ":9092"
-	conf.Client.Proxy.Listen = "127.0.0.1:5052" // client
-	t.Log(conf.Client.Proxy.Transfers[0].Dst)
+	conf.Client.Policies = make([]config.Policy, 1)
+	conf.Client.Policies[0].Dst = ":9092"
+	conf.Client.Listen = "127.0.0.1:5052" // client
+	t.Log(conf.Client.Policies[0].Dst)
 
 	client, err := NewClient(conf)
 	if err != nil {
