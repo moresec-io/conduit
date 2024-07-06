@@ -4,22 +4,22 @@
  * Copyright (c) 2022, Moresec Inc.
  * All rights reserved.
  */
-package agent
+package conduit
 
 import (
 	"github.com/jumboframes/armorigo/log"
-	"github.com/moresec-io/conduit/pkg/agent/client"
-	"github.com/moresec-io/conduit/pkg/agent/config"
-	"github.com/moresec-io/conduit/pkg/agent/server"
+	"github.com/moresec-io/conduit/pkg/conduit/client"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/server"
 )
 
-type Agent struct {
+type Conduit struct {
 	conf   *config.Config
 	client *client.Client
 	server *server.Server
 }
 
-func NewAgent() (*Agent, error) {
+func NewConduit() (*Conduit, error) {
 	var (
 		cli *client.Client
 		srv *server.Server
@@ -32,7 +32,7 @@ func NewAgent() (*Agent, error) {
 	}
 	log.Infof(`
 ==================================================
-                CONDUIT AGENT STARTS
+                CONDUIT STARTS
 ==================================================`)
 
 	conf := config.Conf
@@ -40,45 +40,45 @@ func NewAgent() (*Agent, error) {
 	if conf.Client.Enable {
 		cli, err = client.NewClient(conf)
 		if err != nil {
-			log.Errorf("agent new client err: %s", err)
+			log.Errorf("Conduit new client err: %s", err)
 			return nil, err
 		}
 	}
 	if conf.Server.Enable {
 		srv, err = server.NewServer(conf)
 		if err != nil {
-			log.Errorf("agent new server err: %s", err)
+			log.Errorf("Conduit new server err: %s", err)
 			return nil, err
 		}
 	}
-	return &Agent{
+	return &Conduit{
 		conf:   conf,
 		client: cli,
 		server: srv,
 	}, nil
 }
 
-func (agent *Agent) Run() {
-	if agent.conf.Client.Enable {
-		go agent.client.Work()
+func (Conduit *Conduit) Run() {
+	if Conduit.conf.Client.Enable {
+		go Conduit.client.Work()
 	}
-	if agent.conf.Server.Enable {
-		go agent.server.Work()
+	if Conduit.conf.Server.Enable {
+		go Conduit.server.Work()
 	}
 }
 
-func (agent *Agent) Close() {
+func (Conduit *Conduit) Close() {
 	defer func() {
 		log.Infof(`
 ==================================================
-                CONDUIT AGENT ENDS
+                CONDUIT ENDS
 ==================================================`)
 	}()
-	if agent.conf.Client.Enable {
-		agent.client.Close()
+	if Conduit.conf.Client.Enable {
+		Conduit.client.Close()
 	}
-	if agent.conf.Server.Enable {
-		agent.server.Close()
+	if Conduit.conf.Server.Enable {
+		Conduit.server.Close()
 	}
 	config.RotateLog.Close()
 }

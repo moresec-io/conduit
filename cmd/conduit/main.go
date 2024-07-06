@@ -10,19 +10,19 @@ import (
 	"context"
 
 	"github.com/jumboframes/armorigo/sigaction"
-	"github.com/moresec-io/conduit/pkg/agent"
+	conduit "github.com/moresec-io/conduit/pkg/conduit"
 	//_ "net/http/pprof"
 )
 
 func main() {
-	agent, err := agent.NewAgent()
+	conduit, err := conduit.NewConduit()
 	if err != nil {
 		return
 	}
-	agent.Run()
+	conduit.Run()
 
 	sig := sigaction.NewSignal()
 	sig.Wait(context.TODO())
 
-	agent.Close()
+	conduit.Close()
 }

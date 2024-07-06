@@ -39,10 +39,15 @@ func (client *Client) initIPSet() error {
 		log.Errorf("client init ipport ipset, init err: %s", err)
 		return err
 	}
+	err = netlink.IpsetCreate(ConduitIPSetIP, "hash:ip", netlink.IpsetCreateOptions{})
+	if err != nil {
+		log.Errorf("client init ip ipset, init err: %s", err)
+		return err
+	}
 	return nil
 }
 
-func (client *Client) addIPSetIPPort(ip net.IP, port uint16) error {
+func (client *Client) AddIPSetIPPort(ip net.IP, port uint16) error {
 	err := netlink.IpsetAdd(ConduitIPSetIPPort, &netlink.IPSetEntry{
 		IP:   ip,
 		Port: &port,
@@ -53,7 +58,7 @@ func (client *Client) addIPSetIPPort(ip net.IP, port uint16) error {
 	return err
 }
 
-func (client *Client) addIPSetPort(port uint16) error {
+func (client *Client) AddIPSetPort(port uint16) error {
 	err := netlink.IpsetAdd(ConduitIPSetPort, &netlink.IPSetEntry{
 		Port: &port,
 	})
@@ -63,7 +68,17 @@ func (client *Client) addIPSetPort(port uint16) error {
 	return err
 }
 
-func (client *Client) delIPSetIPPort(ip net.IP, port uint16) error {
+func (client *Client) AddIPSetIP(ip net.IP) error {
+	err := netlink.IpsetAdd(ConduitIPSetIP, &netlink.IPSetEntry{
+		IP: ip,
+	})
+	if err != nil {
+		log.Errorf("client del ip: %s err: %s", ip, err)
+	}
+	return err
+}
+
+func (client *Client) DelIPSetIPPort(ip net.IP, port uint16) error {
 	err := netlink.IpsetDel(ConduitIPSetIPPort, &netlink.IPSetEntry{
 		IP:   ip,
 		Port: &port,
@@ -74,7 +89,7 @@ func (client *Client) delIPSetIPPort(ip net.IP, port uint16) error {
 	return err
 }
 
-func (client *Client) delIPSetPort(port uint16) error {
+func (client *Client) DelIPSetPort(port uint16) error {
 	err := netlink.IpsetDel(ConduitIPSetPort, &netlink.IPSetEntry{
 		Port: &port,
 	})
@@ -84,7 +99,18 @@ func (client *Client) delIPSetPort(port uint16) error {
 	return err
 }
 
+func (client *Client) DelIPSetIP(ip net.IP) error {
+	err := netlink.IpsetDel(ConduitIPSetIP, &netlink.IPSetEntry{
+		IP: ip,
+	})
+	if err != nil {
+		log.Errorf("client del ip: %s err: %s", ip, err)
+	}
+	return err
+}
+
 func (client *Client) finiIPSet(prefix string) error {
+	// flush
 	err := netlink.IpsetFlush(ConduitIPSetIPPort)
 	if err != nil {
 		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
@@ -93,14 +119,23 @@ func (client *Client) finiIPSet(prefix string) error {
 	if err != nil {
 		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
+	err = netlink.IpsetFlush(ConduitIPSetIP)
+	if err != nil {
+		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetIP, err)
+	}
 
+	// destroy
 	err = netlink.IpsetDestroy(ConduitIPSetPort)
 	if err != nil {
 		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetDestroy(ConduitIPSetIPPort)
 	if err != nil {
-		log.Warnf("%s, destroy ipset: %s, err: %s", prefix, ConduitIPSetIPPort, err)
+		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIPPort, err)
+	}
+	err = netlink.IpsetDestroy(ConduitIPSetIP)
+	if err != nil {
+		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIP, err)
 	}
 	return nil
 }

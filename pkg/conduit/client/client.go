@@ -18,8 +18,8 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
-	"github.com/moresec-io/conduit/pkg/agent/config"
-	"github.com/moresec-io/conduit/pkg/agent/proto"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
 	"github.com/moresec-io/conduit/pkg/tproxy"
 	"github.com/moresec-io/conduit/pkg/utils"
@@ -29,6 +29,7 @@ const (
 	ConduitChain       = "CONDUIT"
 	ConduitIPSetPort   = "CONDUIT_PORT"
 	ConduitIPSetIPPort = "CONDUIT_IPPORT"
+	ConduitIPSetIP     = "CONDUIT_IP"
 )
 
 type Client struct {
@@ -92,12 +93,12 @@ func (client *Client) setStaticPolicies() error {
 			return err
 		}
 		if ip == "" {
-			err = client.addIPSetPort(uint16(port))
+			err = client.AddIPSetPort(uint16(port))
 			if err != nil {
 				return err
 			}
 		} else {
-			err = client.addIPSetIPPort(net.ParseIP(ip), uint16(port))
+			err = client.AddIPSetIPPort(net.ParseIP(ip), uint16(port))
 			if err != nil {
 				return err
 			}

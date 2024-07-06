@@ -9,7 +9,7 @@ package client
 import (
 	"testing"
 
-	"github.com/moresec-io/conduit/pkg/agent/config"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
 )
 
 func TestSetTables(t *testing.T) {

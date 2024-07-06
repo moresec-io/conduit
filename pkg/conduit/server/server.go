@@ -18,9 +18,9 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
-	"github.com/moresec-io/conduit/pkg/agent/config"
-	"github.com/moresec-io/conduit/pkg/agent/proto"
-	"github.com/moresec-io/conduit/pkg/agent/sys"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/proto"
+	"github.com/moresec-io/conduit/pkg/conduit/sys"
 	"github.com/moresec-io/conduit/pkg/utils"
 )
 

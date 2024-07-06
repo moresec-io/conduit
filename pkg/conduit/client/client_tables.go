@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
-	"github.com/moresec-io/conduit/pkg/agent/errors"
+	"github.com/moresec-io/conduit/pkg/conduit/errors"
 	xtables "github.com/singchia/go-xtables"
 	"github.com/singchia/go-xtables/iptables"
 	"github.com/singchia/go-xtables/pkg/network"
@@ -141,6 +141,24 @@ func (client *Client) initTables() error {
 			return err
 		}
 	}
+
+	// dnat ip
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Check()
+	if err != nil {
+		log.Errorf("client init tables, check ipport dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+		return err
+	}
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
+			TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Append()
+		if err != nil {
+			log.Errorf("client init tables, append ipport dnat to dst err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			return err
+		}
+	}
 	return nil
 }
 
@@ -157,16 +175,23 @@ func (client *Client) finiTables(prefix string) {
 	// delete dnats
 	userDefined := iptables.ChainTypeUserDefined
 	userDefined.SetName(ConduitChain)
-
+	// dnat port
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
 	if err != nil {
 		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
-
+	// dnat ip port
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
+		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
+	if err != nil {
+		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+	}
+	// dnat ip
+	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
 	if err != nil {
 		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))

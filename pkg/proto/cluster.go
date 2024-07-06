@@ -8,8 +8,8 @@ type PullClusterRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
-type Agent ReportAgentRequest
+type Conduit ReportConduitRequest
 
 type PullClusterResponse struct {
-	Agents []Agent `json:"agents"`
+	Conduits []Conduit `json:"conduits"`
 }
