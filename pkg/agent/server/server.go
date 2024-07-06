@@ -12,10 +12,8 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
-	"os"
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
@@ -23,6 +21,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/agent/config"
 	"github.com/moresec-io/conduit/pkg/agent/proto"
 	"github.com/moresec-io/conduit/pkg/agent/sys"
+	"github.com/moresec-io/conduit/pkg/utils"
 )
 
 type Server struct {
@@ -39,48 +38,9 @@ type Server struct {
 func NewServer(conf *config.Config) (*Server, error) {
 	var err error
 	server := &Server{conf: conf}
-	switch conf.Server.Proxy.Mode {
-	case proto.ProxyModeRaw:
-		server.listener, err = net.Listen("tcp4", conf.Server.Proxy.Listen)
-		if err != nil {
-			return nil, err
-		}
-	case proto.ProxyModeTls:
-		cert, err := tls.LoadX509KeyPair(conf.Server.Cert.CertFile,
-			conf.Server.Cert.KeyFile)
-		if err != nil {
-			return nil, err
-		}
-		server.listener, err = tls.Listen("tcp4", conf.Server.Proxy.Listen,
-			&tls.Config{
-				Certificates: []tls.Certificate{cert},
-			})
-		if err != nil {
-			return nil, err
-		}
-	case proto.ProxyModeMTls:
-		ca, err := os.ReadFile(conf.Server.Cert.CaFile)
-		if err != nil {
-			return nil, err
-		}
-		caPool := x509.NewCertPool()
-		caPool.AppendCertsFromPEM(ca)
-		cert, err := tls.LoadX509KeyPair(conf.Server.Cert.CertFile,
-			conf.Server.Cert.KeyFile)
-		if err != nil {
-			return nil, err
-		}
-		server.listener, err = tls.Listen("tcp4", conf.Server.Proxy.Listen,
-			&tls.Config{
-				ClientCAs:    caPool,
-				ClientAuth:   tls.RequireAndVerifyClientCert,
-				Certificates: []tls.Certificate{cert},
-			})
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, errors.New("unsupported proxy mode")
+	server.listener, err = utils.Listen(&conf.Server.Listen)
+	if err != nil {
+		return nil, err
 	}
 	return server, nil
 }
@@ -110,29 +70,29 @@ func (server *Server) replaceDstfunc(conn net.Conn) (net.Addr, net.Conn, error) 
 	_, err := io.ReadFull(conn, bs)
 	if err != nil {
 		conn.Close()
-		log.Errorf("Server::proxy | read size err: %s", err)
+		log.Errorf("server replace dst func, read size err: %s", err)
 		return nil, nil, err
 	}
 	data := make([]byte, binary.LittleEndian.Uint32(bs))
 	_, err = io.ReadFull(conn, data)
 	if err != nil {
 		conn.Close()
-		log.Errorf("Server::proxy | read meta err: %s", err)
+		log.Errorf("server replace dst func, read meta err: %s", err)
 		return nil, nil, err
 	}
 	proto := &proto.ConduitProto{}
 	err = json.Unmarshal(data, proto)
 	if err != nil {
 		conn.Close()
-		log.Errorf("Server::proxy | json unmarshal err: %s", err)
+		log.Errorf("server replace dst func, json unmarshal err: %s", err)
 		return nil, nil, err
 	}
-	log.Debugf("Server::proxy | accept src: %s, dst: %s, to: %s",
+	log.Debugf("server replace dst func, accept src: %s, dst: %s, to: %s",
 		conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.Dst)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.Dst)
 	if err != nil {
 		conn.Close()
-		log.Errorf("Server::proxy | net resolve err: %s", err)
+		log.Errorf("server replace dst func, net resolve err: %s", err)
 		return nil, nil, err
 	}
 	return tcpAddr, conn, nil

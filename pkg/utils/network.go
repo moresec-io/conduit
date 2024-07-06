@@ -21,6 +21,10 @@ func ListNetworks() ([]net.IPNet, error) {
 		if link.Attrs().Name == "lo" {
 			continue
 		}
+		if _, isBridge := link.(*netlink.Bridge); isBridge {
+			// we don't handle bridge for now
+			continue
+		}
 		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			return nil, err

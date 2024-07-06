@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/config"
 
 	"github.com/natefinch/lumberjack"
 	"gopkg.in/yaml.v2"
@@ -27,40 +28,39 @@ var (
 	defaultFile string = "./conduit.yaml"
 )
 
-type Config struct {
-	Server struct {
-		Enable bool `yaml:"enable"`
-		Proxy  struct {
-			Mode   string `yaml:"mode"`
-			Listen string `yaml:"listen"`
-		}
-		Cert struct {
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
-			CaFile   string `yaml:"ca_file"`
-		} `yaml:"cert"`
-	} `yaml:"server"`
+type Conduit struct {
+	Enable bool        `yaml:"enable"`
+	Dial   config.Dial `yaml:"dial"`
+}
 
-	Client struct {
-		Enable bool `yaml:"enable"`
-		Proxy  struct {
-			Mode      string     `yaml:"mode"`
-			LocalMode string     `yaml:"local_mode"`
-			Listen    string     `yaml:"listen"` // for transparent
-			CheckTime int        `yaml:"check_time"`
-			Transfers []struct { // dstA -> B -> dstC
-				Dst   string `yaml:"dst"`    // :9092
-				Proxy string `yaml:"proxy"`  // 192.168.111.149
-				DstTo string `yaml:"dst_to"` // 127.0.0.1:9092
-			} `yaml:"transfers"`
-			Timeout    int `yaml:"timeout"`
-			ServerPort int `yaml:"server_port"`
-		} `yaml:"proxy"`
-		Cert struct {
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
-		} `yaml:"cert"`
-	} `yaml:"client"`
+type Server struct {
+	Enable bool          `yaml:"enable"`
+	Listen config.Listen `yaml:"listen"`
+}
+
+type Policy struct {
+	Dst   string       `yaml:"dst"`              // :9092
+	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 192.168.111.149
+	DstTo string       `yaml:"dst_to,omitempty"` // 127.0.0.1:9092
+}
+type Client struct {
+	Enable       bool     `yaml:"enable"`
+	Listen       string   `yaml:"listen"` // for tcp transparent
+	CheckTime    int      `yaml:"check_time"`
+	Policies     []Policy `yaml:"policies"`
+	DefaultProxy struct {
+		Network    string
+		ServerPort int        `yaml:"server_port"` // addr is combined by dst:server_port
+		TLS        config.TLS `yaml:"tls,omitempty"`
+	} `yaml:"default_proxy"`
+}
+
+type Config struct {
+	Conduit Conduit `yaml:"conduit"`
+
+	Server Server `yaml:"server"`
+
+	Client Client `yaml:"client"`
 
 	Log struct {
 		Level    string `yaml:"level"`
