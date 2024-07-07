@@ -23,6 +23,7 @@ type Reporter struct {
 
 	client *client.Client
 
+	conf  *config.Config
 	mtx   sync.RWMutex
 	cache []proto.Conduit // key: machineid, value: ipnets
 }
@@ -122,6 +123,20 @@ func (reporter *Reporter) offlineConduit(_ context.Context, req geminio.Request,
 	}
 	reporter.mtx.Lock()
 	defer reporter.mtx.Unlock()
+
+	for i, oldone := range reporter.cache {
+		if oldone.MachineID == request.MachineID {
+			for _, remove := range oldone.IPNets {
+				err = reporter.client.DelIPSetIP(remove.IP)
+				if err != nil {
+					log.Errorf("reporter offline conduit, del ipset err: %s", err)
+					continue
+				}
+			}
+			reporter.cache = append(reporter.cache[:i], reporter.cache[i+1:]...)
+			break
+		}
+	}
 }
 
 func (reporter *Reporter) sync() {
@@ -149,6 +164,8 @@ func (reporter *Reporter) reportConduit() error {
 	}
 	request := &proto.ReportConduitRequest{
 		MachineID: reporter.machineid,
+		Network:   reporter.conf.Server.Listen.Network,
+		Listen:    reporter.conf.Server.Listen.Addr,
 		IPNets:    networks,
 	}
 	data, err := json.Marshal(request)

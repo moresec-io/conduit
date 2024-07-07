@@ -11,5 +11,5 @@ type ConduitProto struct {
 	SrcPort int
 	DstIp   string
 	DstPort int
-	Dst     string
+	DstTo   string
 }

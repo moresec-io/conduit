@@ -88,8 +88,8 @@ func (server *Server) replaceDstfunc(conn net.Conn) (net.Addr, net.Conn, error) 
 		return nil, nil, err
 	}
 	log.Debugf("server replace dst func, accept src: %s, dst: %s, to: %s",
-		conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.Dst)
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.Dst)
+		conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.DstTo)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.DstTo)
 	if err != nil {
 		conn.Close()
 		log.Errorf("server replace dst func, net resolve err: %s", err)

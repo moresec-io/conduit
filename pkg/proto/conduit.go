@@ -10,6 +10,8 @@ const (
 
 type ReportConduitRequest struct {
 	MachineID string      `json:"machine_id"`
+	Network   string      `json:"network"`
+	Listen    string      `json:"listen"`
 	IPNets    []net.IPNet `json:"ipnets"`
 }
 

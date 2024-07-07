@@ -135,12 +135,12 @@ func (client *Client) Close() {
 }
 
 type ctx struct {
-	srcIp   string        //源ip
-	srcPort int           //源port
-	dstIp   string        //原始目的ip
-	dstPort int           //原始目的port
+	srcIp   string        // source ip
+	srcPort int           // source port
+	dstIp   string        // real dst ip
+	dstPort int           // real dst port
 	dial    *gconfig.Dial // proxy
-	dst     string        // 代理后地址
+	dstTo   string        // dst after proxy
 }
 
 func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
@@ -173,7 +173,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 			},
 			TLS: client.conf.Client.DefaultProxy.TLS,
 		},
-		dst: dstIp + ":" + strconv.Itoa(dstPort),
+		dstTo: dstIp + ":" + strconv.Itoa(dstPort),
 	}
 	for _, policy := range client.conf.Client.Policies {
 		transferIpPort := strings.Split(policy.Dst, ":")
@@ -184,7 +184,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 					ctx.dial = policy.Proxy
 				}
 				if policy.DstTo != "" {
-					ctx.dst = policy.DstTo
+					ctx.dstTo = policy.DstTo
 				}
 				break
 			}
@@ -215,7 +215,7 @@ func (client *Client) tproxyPreWrite(writer io.Writer, custom interface{}) error
 		SrcPort: ctx.srcPort,
 		DstIp:   ctx.dstIp,
 		DstPort: ctx.dstPort,
-		Dst:     ctx.dst,
+		DstTo:   ctx.dstTo,
 	}
 	data, err := json.Marshal(proto)
 	if err != nil {
