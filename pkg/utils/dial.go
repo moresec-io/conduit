@@ -65,7 +65,7 @@ func Dial(dial *config.Dial, index int) (net.Conn, error) {
 			// mtls, dial with our certs
 			// load all ca certs to pool
 			caPool := x509.NewCertPool()
-			for _, caFile := range dial.TLS.CACerts {
+			for _, caFile := range dial.TLS.CAs {
 				ca, err := os.ReadFile(caFile)
 				if err != nil {
 					klog.Errorf("dial read ca cert err: %s, file: %s", err, caFile)

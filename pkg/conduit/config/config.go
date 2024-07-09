@@ -50,7 +50,7 @@ type Client struct {
 	Policies     []Policy `yaml:"policies"`
 	DefaultProxy struct {
 		Network    string
-		ServerPort int        `yaml:"server_port"` // addr is combined by dst:server_port
+		ServerPort int        `yaml:"server_port"` // server addr is combined by dst:server_port
 		TLS        config.TLS `yaml:"tls,omitempty"`
 	} `yaml:"default_proxy"`
 }
