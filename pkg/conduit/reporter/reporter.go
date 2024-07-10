@@ -40,7 +40,7 @@ func NewReporter(conf *config.Config, client *client.Client) (*Reporter, error) 
 	reporter.machineid = id
 
 	dialer := func() (net.Conn, error) {
-		return utils.DialRandom(&config.Conf.Conduit.Dial)
+		return utils.DialRandom(&config.Conf.Manager.Dial)
 	}
 	opt := gclient.NewEndOptions()
 	opt.SetMeta([]byte(id))

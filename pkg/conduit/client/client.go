@@ -175,11 +175,13 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		},
 		dstTo: dstIp + ":" + strconv.Itoa(dstPort),
 	}
+	staticPolicyMatch := false
 	for _, policy := range client.conf.Client.Policies {
 		transferIpPort := strings.Split(policy.Dst, ":")
 		if transferIpPort[0] == "" || transferIpPort[0] == dstIp {
 			if transferIpPort[1] == ipPort[1] {
-				// match
+				staticPolicyMatch = true
+				// static match
 				if policy.Proxy != nil {
 					ctx.dial = policy.Proxy
 				}

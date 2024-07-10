@@ -28,7 +28,7 @@ var (
 	defaultFile string = "./conduit.yaml"
 )
 
-type Conduit struct {
+type Manager struct {
 	Enable bool        `yaml:"enable"`
 	Dial   config.Dial `yaml:"dial"`
 }
@@ -43,20 +43,22 @@ type Policy struct {
 	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 192.168.111.149
 	DstTo string       `yaml:"dst_to,omitempty"` // 127.0.0.1:9092
 }
+
+// TLS > Default TLS
 type Client struct {
 	Enable       bool     `yaml:"enable"`
 	Listen       string   `yaml:"listen"` // for tcp transparent
 	CheckTime    int      `yaml:"check_time"`
 	Policies     []Policy `yaml:"policies"`
 	DefaultProxy struct {
-		Network    string
+		Network    string     `yaml:"network"`
 		ServerPort int        `yaml:"server_port"` // server addr is combined by dst:server_port
 		TLS        config.TLS `yaml:"tls,omitempty"`
 	} `yaml:"default_proxy"`
 }
 
 type Config struct {
-	Conduit Conduit `yaml:"conduit"`
+	Manager Manager `yaml:"manager"`
 
 	Server Server `yaml:"server"`
 

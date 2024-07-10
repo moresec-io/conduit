@@ -10,10 +10,10 @@ type TLS struct {
 	Enable bool `yaml:"enable" json:"enable"`
 	MTLS   bool `yaml:"mtls" json:"mtls"`
 
-	CACertFromManager  bool      `yaml:"ca_certs_from_manager"`
-	CAs                []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
-	Certs              []CertKey `yaml:"certs" json:"certs"`                               // certs paths
-	InsecureSkipVerify bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
+	CACertFromManagerIfHas bool      `yaml:"ca_certs_from_manager_if_has"`
+	CAs                    []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
+	Certs                  []CertKey `yaml:"certs" json:"certs"`                               // certs paths
+	InsecureSkipVerify     bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
 }
 
 type Listen struct {
