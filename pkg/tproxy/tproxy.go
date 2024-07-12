@@ -30,6 +30,7 @@ func AcquireOriginalDst(conn net.Conn) (net.Addr, net.Conn, error) {
 		}
 		return nil, nil, err
 	}
+
 	tcpFile, err := tcpConn.File()
 	if err != nil {
 		log.Errorf("get tcp file from tcp conn err: %s", err)
@@ -45,7 +46,6 @@ func AcquireOriginalDst(conn net.Conn) (net.Addr, net.Conn, error) {
 		}
 		return nil, nil, err
 	}
-
 	//the real shit
 	mreq, err := syscall.GetsockoptIPv6Mreq(
 		int(tcpFile.Fd()),

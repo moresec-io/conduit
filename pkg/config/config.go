@@ -7,23 +7,21 @@ type CertKey struct {
 }
 
 type TLS struct {
-	Enable bool `yaml:"enable" json:"enable"`
-	MTLS   bool `yaml:"mtls" json:"mtls"`
-
-	CACertFromManagerIfHas bool      `yaml:"ca_certs_from_manager_if_has"`
-	CAs                    []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
-	Certs                  []CertKey `yaml:"certs" json:"certs"`                               // certs paths
-	InsecureSkipVerify     bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
+	Enable             bool      `yaml:"enable" json:"enable"`
+	MTLS               bool      `yaml:"mtls" json:"mtls"`
+	CAs                []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
+	Certs              []CertKey `yaml:"certs" json:"certs"`                               // certs paths
+	InsecureSkipVerify bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
 }
 
 type Listen struct {
 	Network string `yaml:"network" json:"network"`
 	Addr    string `yaml:"addr" json:"addr"`
-	TLS     TLS    `yaml:"tls,omitempty" json:"tls,omitempty"`
+	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 type Dial struct {
 	Network string   `yaml:"network" json:"network"`
 	Addrs   []string `yaml:"addrs" json:"addrs"`
-	TLS     TLS      `yaml:"tls,omitempty" json:"tls"`
+	TLS     *TLS     `yaml:"tls,omitempty" json:"tls"`
 }

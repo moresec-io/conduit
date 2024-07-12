@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/jumboframes/armorigo v0.5.0-rc.2
+	github.com/jumboframes/armorigo v0.5.0-rc.3
 	github.com/singchia/geminio v1.1.5
 	github.com/singchia/go-hammer v0.0.2-0.20220516141917-9d83fc02d653
 	github.com/singchia/go-xtables v1.0.5

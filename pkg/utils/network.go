@@ -2,6 +2,8 @@ package utils
 
 import (
 	"net"
+	"syscall"
+	"unsafe"
 
 	"github.com/vishvananda/netlink"
 )
@@ -34,4 +36,14 @@ func ListNetworks() ([]net.IPNet, error) {
 		}
 	}
 	return ipNets, nil
+}
+
+func GetSocketMark(fd uintptr) (uint32, error) {
+	var mark uint32
+	size := unsafe.Sizeof(mark)
+	_, _, errno := syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, syscall.SOL_SOCKET, syscall.SO_MARK, uintptr(unsafe.Pointer(&mark)), uintptr(unsafe.Pointer(&size)), 0)
+	if errno != 0 {
+		return 0, errno
+	}
+	return mark, nil
 }

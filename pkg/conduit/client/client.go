@@ -32,12 +32,21 @@ const (
 	ConduitIPSetIP     = "CONDUIT_IP"
 )
 
+type policy struct {
+	dial  *gconfig.Dial
+	dstTo string
+}
+
 type Client struct {
 	conf *config.Config
 	rp   *rproxy.RProxy
 	quit chan struct{}
 	// listen port
 	port int
+
+	// static policies
+	ipportPolicies map[string]*policy
+	portPolicies   map[int]*policy
 }
 
 func NewClient(conf *config.Config) (*Client, error) {
@@ -54,6 +63,22 @@ func NewClient(conf *config.Config) (*Client, error) {
 		return nil, err
 	}
 	client.port = port
+
+	// static policy match
+	for _, policy := range conf.Client.Policies {
+		ipport := strings.Split(policy.Dst, ":")
+		if len(ipport) != 2 {
+			// TODO warning
+			continue
+		}
+		ipstr := ipport[0]
+		portstr := ipport[1]
+		port, err := strconv.Atoi(portstr)
+		if err != nil {
+			// TODO warning
+			continue
+		}
+	}
 	return client, nil
 }
 
@@ -135,16 +160,21 @@ func (client *Client) Close() {
 }
 
 type ctx struct {
-	srcIp   string        // source ip
-	srcPort int           // source port
-	dstIp   string        // real dst ip
-	dstPort int           // real dst port
-	dial    *gconfig.Dial // proxy
-	dstTo   string        // dst after proxy
+	// connection info
+	srcIp   string // source ip
+	srcPort int    // source port
+	dstIp   string // real dst ip
+	dstPort int    // real dst port
+	mark    uint32
+	// proxy info
+	dial  *gconfig.Dial // proxy
+	dstTo string        // dst after proxy
 }
 
 func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 	log.Debugf("client tproxy post accept, src: %s, dst: %s", src.String(), dst.String())
+
+	conf := &client.conf.Client
 
 	ipPort := strings.Split(src.String(), ":")
 	srcIp := ipPort[0]
@@ -166,37 +196,83 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		srcPort: srcPort,
 		dstIp:   dstIp,
 		dstPort: dstPort,
-		dial: &gconfig.Dial{
-			Network: client.conf.Client.DefaultProxy.Network,
-			Addrs: []string{
-				dstIp + ":" + strconv.Itoa(client.conf.Client.DefaultProxy.ServerPort),
-			},
-			TLS: client.conf.Client.DefaultProxy.TLS,
-		},
-		dstTo: dstIp + ":" + strconv.Itoa(dstPort),
+		dstTo:   dstIp + ":" + strconv.Itoa(dstPort),
 	}
 	staticPolicyMatch := false
-	for _, policy := range client.conf.Client.Policies {
+	for _, policy := range conf.Policies {
 		transferIpPort := strings.Split(policy.Dst, ":")
-		if transferIpPort[0] == "" || transferIpPort[0] == dstIp {
-			if transferIpPort[1] == ipPort[1] {
-				staticPolicyMatch = true
-				// static match
-				if policy.Proxy != nil {
-					ctx.dial = policy.Proxy
-				}
-				if policy.DstTo != "" {
-					ctx.dstTo = policy.DstTo
-				}
-				break
+		if len(transferIpPort) != 2 {
+			// TODO warning
+			continue
+		}
+		ip := transferIpPort[0]
+		port := transferIpPort[1]
+		if (ip == "" || ip == dstIp) && port == ipPort[1] {
+			staticPolicyMatch = true
+			// static match
+			if policy.Proxy != nil {
+				ctx.dial = policy.Proxy
 			}
+			if policy.DstTo != "" {
+				ctx.dstTo = policy.DstTo
+			}
+			break
+		}
+	}
+	if !staticPolicyMatch {
+		// manager
+		return ctx, nil
+	}
+	if ctx.dial.TLS == nil {
+		ctx.dial = &gconfig.Dial{
+			Network: conf.DefaultProxy.Network,
+			Addrs: []string{
+				dstIp + ":" + strconv.Itoa(conf.DefaultProxy.ServerPort),
+			},
+			TLS: conf.DefaultProxy.TLS,
 		}
 	}
 	return ctx, nil
 }
 
+func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
+	var err error
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		if err = conn.Close(); err != nil {
+			log.Errorf("handle conn, close non tcp conn err: %s", err)
+		}
+		return err
+	}
+	tcpFile, err := tcpConn.File()
+	if err != nil {
+		log.Errorf("handle conn, get tcp file from tcp conn err: %s", err)
+		if err = tcpConn.Close(); err != nil {
+			log.Errorf("handle conn, close tcp conn err: %s", err)
+		}
+		return err
+	}
+	if err = tcpConn.Close(); err != nil {
+		log.Errorf("handle conn, close tcp conn err: %s", err)
+		if err = tcpFile.Close(); err != nil {
+			log.Errorf("handle conn, close tcp file err: %s", err)
+		}
+		return err
+	}
+	mark, err := utils.GetSocketMark(tcpFile.Fd())
+	if err != nil {
+		log.Warnf("handle conn, get socket mark err: %s", err)
+	}
+	ctx := custom.(*ctx)
+	if mark != 0 {
+
+	} else {
+		// mark not found, maybe fwmark_accept not enabled
+	}
+	return nil
+}
+
 func (client *Client) tproxyPreDial(custom interface{}) error {
-	// TODO
 	return nil
 }
 
@@ -206,7 +282,6 @@ func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, er
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {
-	// TODO
 	return nil
 }
 

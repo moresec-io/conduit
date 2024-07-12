@@ -51,9 +51,9 @@ type Client struct {
 	CheckTime    int      `yaml:"check_time"`
 	Policies     []Policy `yaml:"policies"`
 	DefaultProxy struct {
-		Network    string     `yaml:"network"`
-		ServerPort int        `yaml:"server_port"` // server addr is combined by dst:server_port
-		TLS        config.TLS `yaml:"tls,omitempty"`
+		Network    string      `yaml:"network"`
+		ServerPort int         `yaml:"server_port"` // server addr is combined by dst:server_port
+		TLS        *config.TLS `yaml:"tls,omitempty"`
 	} `yaml:"default_proxy"`
 }
 
