@@ -33,8 +33,8 @@ const (
 )
 
 type policy struct {
-	dial  *gconfig.Dial
-	dstTo string
+	dialCondig *utils.DialConfig
+	dstTo      string
 }
 
 type Client struct {
@@ -51,9 +51,12 @@ type Client struct {
 
 func NewClient(conf *config.Config) (*Client, error) {
 	client := &Client{
-		conf: conf,
-		quit: make(chan struct{}),
+		conf:           conf,
+		quit:           make(chan struct{}),
+		ipportPolicies: make(map[string]*policy),
+		portPolicies:   make(map[int]*policy),
 	}
+	// listen
 	ipPort := strings.Split(conf.Client.Listen, ":")
 	if len(ipPort) != 2 {
 		return nil, errors.New("illegal client listen addr")
@@ -65,18 +68,30 @@ func NewClient(conf *config.Config) (*Client, error) {
 	client.port = port
 
 	// static policy match
-	for _, policy := range conf.Client.Policies {
-		ipport := strings.Split(policy.Dst, ":")
+	for _, configpolicy := range conf.Client.Policies {
+		dst, dstTo := configpolicy.Dst, configpolicy.DstTo
+		ipport := strings.Split(dst, ":")
 		if len(ipport) != 2 {
-			// TODO warning
-			continue
+			return nil, errors.New("illegal policy")
 		}
 		ipstr := ipport[0]
 		portstr := ipport[1]
 		port, err := strconv.Atoi(portstr)
 		if err != nil {
-			// TODO warning
-			continue
+			return nil, err
+		}
+		dialconfig, err := utils.ConvertConfig(configpolicy.Proxy)
+		if err != nil {
+			return nil, err
+		}
+		policy := &policy{
+			dialCondig: dialconfig,
+			dstTo:      dstTo,
+		}
+		if ipstr == "" {
+			client.portPolicies[port] = policy
+		} else {
+			client.ipportPolicies[dst] = policy
 		}
 	}
 	return client, nil
@@ -263,7 +278,7 @@ func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
 	if err != nil {
 		log.Warnf("handle conn, get socket mark err: %s", err)
 	}
-	ctx := custom.(*ctx)
+	_ = custom.(*ctx)
 	if mark != 0 {
 
 	} else {

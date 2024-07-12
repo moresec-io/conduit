@@ -10,7 +10,6 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
-	"k8s.io/klog/v2"
 )
 
 func DialRandom(dial *config.Dial) (net.Conn, error) {
@@ -80,10 +79,7 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 	}
 }
 
-func Dial(dial *config.Dial, index int) (net.Conn, error) {
-	if len(dial.Addrs) == 0 {
-		return nil, errors.New("illegal addrs")
-	}
+func ConvertConfig(dial *config.Dial) (*DialConfig, error) {
 	dialConfig := &DialConfig{
 		Netwotk: dial.Network,
 		Addrs:   dial.Addrs,
@@ -94,8 +90,8 @@ func Dial(dial *config.Dial, index int) (net.Conn, error) {
 		for _, certFile := range dial.TLS.Certs {
 			cert, err := tls.LoadX509KeyPair(certFile.Cert, certFile.Key)
 			if err != nil {
-				klog.Errorf("dial, tls load x509 cert err: %s, cert: %s, key: %s", err, certFile.Cert, certFile.Key)
-				continue
+				log.Errorf("dial, tls load x509 cert err: %s, cert: %s, key: %s", err, certFile.Cert, certFile.Key)
+				return nil, err
 			}
 			certs = append(certs, cert)
 		}
@@ -116,12 +112,23 @@ func Dial(dial *config.Dial, index int) (net.Conn, error) {
 				}
 				if !caPool.AppendCertsFromPEM(ca) {
 					log.Warnf("dial append ca cert to ca pool err: %s, file: %s", err, caFile)
-					continue
+					return nil, err
 				}
 			}
 			tls.CAPool = caPool
 		}
 		dialConfig.TLS = tls
+	}
+	return dialConfig, nil
+}
+
+func Dial(dial *config.Dial, index int) (net.Conn, error) {
+	if len(dial.Addrs) == 0 {
+		return nil, errors.New("illegal addrs")
+	}
+	dialConfig, err := ConvertConfig(dial)
+	if err != nil {
+		return nil, err
 	}
 	return DialWithConfig(dialConfig, index)
 }
