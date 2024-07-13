@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
 
 	"golang.org/x/sys/unix"
 )
@@ -25,7 +26,7 @@ func Control(network, address string, conn syscall.RawConn) error {
 		if operr != nil {
 			return
 		}
-		operr = syscall.SetsockoptInt(int(fd), unix.SOL_SOCKET, syscall.SO_MARK, 5053)
+		operr = syscall.SetsockoptInt(int(fd), unix.SOL_SOCKET, syscall.SO_MARK, config.MarkIgnoreOurself)
 		if operr != nil {
 			return
 		}

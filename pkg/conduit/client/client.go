@@ -33,7 +33,7 @@ const (
 )
 
 type policy struct {
-	dialCondig *utils.DialConfig
+	dialConfig *utils.DialConfig
 	dstTo      string
 }
 
@@ -47,6 +47,7 @@ type Client struct {
 	// static policies
 	ipportPolicies map[string]*policy
 	portPolicies   map[int]*policy
+	ipPolicies     map[string]*policy
 }
 
 func NewClient(conf *config.Config) (*Client, error) {
@@ -55,6 +56,7 @@ func NewClient(conf *config.Config) (*Client, error) {
 		quit:           make(chan struct{}),
 		ipportPolicies: make(map[string]*policy),
 		portPolicies:   make(map[int]*policy),
+		ipPolicies:     make(map[string]*policy),
 	}
 	// listen
 	ipPort := strings.Split(conf.Client.Listen, ":")
@@ -66,6 +68,16 @@ func NewClient(conf *config.Config) (*Client, error) {
 		return nil, err
 	}
 	client.port = port
+
+	// default proxy
+	config := &gconfig.Dial{
+		Network: conf.Client.DefaultProxy.Network,
+		TLS:     conf.Client.DefaultProxy.TLS,
+	}
+	defaultdialconfig, err := utils.ConvertConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
 	// static policy match
 	for _, configpolicy := range conf.Client.Policies {
@@ -80,18 +92,25 @@ func NewClient(conf *config.Config) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		dialconfig, err := utils.ConvertConfig(configpolicy.Proxy)
-		if err != nil {
-			return nil, err
-		}
-		policy := &policy{
-			dialCondig: dialconfig,
-			dstTo:      dstTo,
+		var po *policy
+		if configpolicy.Proxy == nil {
+			po = &policy{
+				dialConfig: defaultdialconfig,
+			}
+		} else {
+			dialconfig, err := utils.ConvertConfig(configpolicy.Proxy)
+			if err != nil {
+				return nil, err
+			}
+			po = &policy{
+				dialConfig: dialconfig,
+				dstTo:      dstTo,
+			}
 		}
 		if ipstr == "" {
-			client.portPolicies[port] = policy
+			client.portPolicies[port] = po
 		} else {
-			client.ipportPolicies[dst] = policy
+			client.ipportPolicies[dst] = po
 		}
 	}
 	return client, nil
@@ -158,7 +177,8 @@ func (client *Client) proxy() error {
 		rproxy.OptionRProxyPostDial(client.tproxyPostDial),
 		rproxy.OptionRProxyPreWrite(client.tproxyPreWrite),
 		rproxy.OptionRProxyReplaceDst(tproxy.AcquireOriginalDst),
-		rproxy.OptionRProxyDial(client.tproxyDial))
+		rproxy.OptionRProxyDial(client.tproxyDial),
+		rproxy.OptionRProxyHandleConn(client.handleConn))
 	if err != nil {
 		return err
 	}
@@ -180,17 +200,14 @@ type ctx struct {
 	srcPort int    // source port
 	dstIp   string // real dst ip
 	dstPort int    // real dst port
-	mark    uint32
+	dst     string // real dst in string
 	// proxy info
-	dial  *gconfig.Dial // proxy
-	dstTo string        // dst after proxy
+	dial  *policy // proxy
+	dstTo string  // dst after proxy
 }
 
 func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 	log.Debugf("client tproxy post accept, src: %s, dst: %s", src.String(), dst.String())
-
-	conf := &client.conf.Client
-
 	ipPort := strings.Split(src.String(), ":")
 	srcIp := ipPort[0]
 	srcPort, err := strconv.Atoi(ipPort[1])
@@ -211,41 +228,8 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		srcPort: srcPort,
 		dstIp:   dstIp,
 		dstPort: dstPort,
+		dst:     dst.String(),
 		dstTo:   dstIp + ":" + strconv.Itoa(dstPort),
-	}
-	staticPolicyMatch := false
-	for _, policy := range conf.Policies {
-		transferIpPort := strings.Split(policy.Dst, ":")
-		if len(transferIpPort) != 2 {
-			// TODO warning
-			continue
-		}
-		ip := transferIpPort[0]
-		port := transferIpPort[1]
-		if (ip == "" || ip == dstIp) && port == ipPort[1] {
-			staticPolicyMatch = true
-			// static match
-			if policy.Proxy != nil {
-				ctx.dial = policy.Proxy
-			}
-			if policy.DstTo != "" {
-				ctx.dstTo = policy.DstTo
-			}
-			break
-		}
-	}
-	if !staticPolicyMatch {
-		// manager
-		return ctx, nil
-	}
-	if ctx.dial.TLS == nil {
-		ctx.dial = &gconfig.Dial{
-			Network: conf.DefaultProxy.Network,
-			Addrs: []string{
-				dstIp + ":" + strconv.Itoa(conf.DefaultProxy.ServerPort),
-			},
-			TLS: conf.DefaultProxy.TLS,
-		}
 	}
 	return ctx, nil
 }
@@ -278,11 +262,33 @@ func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
 	if err != nil {
 		log.Warnf("handle conn, get socket mark err: %s", err)
 	}
-	_ = custom.(*ctx)
-	if mark != 0 {
-
-	} else {
-		// mark not found, maybe fwmark_accept not enabled
+	ctx := custom.(*ctx)
+	var policy *policy
+	switch mark {
+	case uint32(config.MarkIpsetIP):
+		// manager policy
+		policy, ok = client.ipPolicies[ctx.dstIp]
+		if !ok {
+			return errors.New("policy not found")
+		}
+		ctx.dial = policy
+	case uint32(config.MarkIpsetIPPort):
+		policy, ok = client.ipportPolicies[ctx.dst]
+		if !ok {
+			return errors.New("policy not found")
+		}
+		ctx.dial = policy
+	case uint32(config.MarkIpsetPort):
+		policy, ok = client.portPolicies[ctx.dstPort]
+		if !ok {
+			return errors.New("policy not found")
+		}
+		ctx.dial = policy
+	default:
+		// failed to get mask, maybe fwmark_accept not enabled, we must iterate policies
+	}
+	if policy.dstTo != "" {
+		ctx.dstTo = policy.dstTo
 	}
 	return nil
 }
@@ -293,7 +299,7 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
-	return utils.DialRandom(ctx.dial)
+	return utils.DialRandomWithConfig(ctx.dial.dialConfig)
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {

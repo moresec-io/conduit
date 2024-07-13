@@ -31,6 +31,11 @@ type DialConfig struct {
 	TLS     *TLS
 }
 
+func DialRandomWithConfig(dialconfig *DialConfig) (net.Conn, error) {
+	idx := rand.Intn(len(dialconfig.Addrs))
+	return DialWithConfig(dialconfig, idx)
+}
+
 func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 	if len(dialconfig.Addrs) == 0 {
 		return nil, errors.New("illegal addrs")

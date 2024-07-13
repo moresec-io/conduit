@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/errors"
 	xtables "github.com/singchia/go-xtables"
 	"github.com/singchia/go-xtables/iptables"
@@ -42,9 +43,9 @@ func (client *Client) setTables() error {
 
 func (client *Client) initTables() error {
 	ipt := iptables.NewIPTables()
-	// ignore the mark
+	// ignore ourself connection by setting mark
 	exist, err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
-		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, config.MarkIgnoreOurself).
 		OptionWait(0).TargetAccept().Check()
 	if err != nil {
 		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
@@ -52,7 +53,7 @@ func (client *Client) initTables() error {
 	}
 	if !exist {
 		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
-			MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+			MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, config.MarkIgnoreOurself).
 			OptionWait(0).TargetAccept().Insert()
 		if err != nil {
 			log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
@@ -71,14 +72,14 @@ func (client *Client) initTables() error {
 	}
 
 	// check jump conduit exists, in NAT-PREROUTING
-	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br+").
 		OptionWait(0).TargetJumpChain(ConduitChain).Check()
 	if err != nil {
 		log.Errorf("client init tables, check jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
 	if !exist {
-		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br-+").
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).MatchInInterface(false, "br+").
 			OptionWait(0).TargetJumpChain(ConduitChain).Append()
 		if err != nil {
 			log.Errorf("client init tables, add jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
@@ -86,16 +87,17 @@ func (client *Client) initTables() error {
 	}
 
 	// check jump conduit exists, in NAT-OUTPUT
-	// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
-	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
+	// src->5013 => src->5052 => ?->5053 => ?->5013 => ...
+	// if the port 5013 belongs other proxy like docker-prory,
+	// this rule would avoid dead loop
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br+").
 		OptionWait(0).TargetJumpChain(ConduitChain).Check()
 	if err != nil {
 		log.Errorf("client init tables, check jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
 	if !exist {
-		// src->5013 => src->5052 => ?->5053 => ?->5013 => 如果5013是docker-proxy，那么就会避免重新命中这条iptables
-		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br-+").
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).MatchOutInterface(true, "br+").
 			OptionWait(0).TargetJumpChain(ConduitChain).Append()
 		if err != nil {
 			log.Errorf("client init tables, add jump conduit chain err: %s", strings.TrimSuffix(err.Error(), "\n"))
@@ -105,6 +107,25 @@ func (client *Client) initTables() error {
 
 	userDefined := iptables.ChainTypeUserDefined
 	userDefined.SetName(ConduitChain)
+
+	// add ipset match fwmark
+	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
+		MatchMark(false, config.MarkIpsetIPPort).
+		OptionWait(0).TargetAccept().Check()
+	if err != nil {
+		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+		return err
+	}
+	if !exist {
+		err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
+			MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, config.MarkIgnoreOurself).
+			OptionWait(0).TargetAccept().Insert()
+		if err != nil {
+			log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			return err
+		}
+	}
 
 	// dnat port
 	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
@@ -166,7 +187,7 @@ func (client *Client) finiTables(prefix string) {
 	ipt := iptables.NewIPTables()
 	// delete the mark
 	err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
-		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, 5053).
+		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, config.MarkIgnoreOurself).
 		OptionWait(0).TargetAccept().Delete()
 	if err != nil {
 		log.Debugf("%s, delete mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))

@@ -28,6 +28,13 @@ var (
 	defaultFile string = "./conduit.yaml"
 )
 
+var (
+	MarkIgnoreOurself = 1444
+	MarkIpsetIP       = 1445
+	MarkIpsetIPPort   = 1446
+	MarkIpsetPort     = 1447
+)
+
 type Manager struct {
 	Enable bool        `yaml:"enable"`
 	Dial   config.Dial `yaml:"dial"`
@@ -40,7 +47,7 @@ type Server struct {
 
 type Policy struct {
 	Dst   string       `yaml:"dst"`              // :9092
-	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 192.168.111.149
+	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 代理
 	DstTo string       `yaml:"dst_to,omitempty"` // 127.0.0.1:9092
 }
 
