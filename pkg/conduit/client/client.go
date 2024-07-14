@@ -26,7 +26,10 @@ import (
 )
 
 const (
-	ConduitChain       = "CONDUIT"
+	// chain
+	ConduitChain = "CONDUIT"
+
+	// ipset
 	ConduitIPSetPort   = "CONDUIT_PORT"
 	ConduitIPSetIPPort = "CONDUIT_IPPORT"
 	ConduitIPSetIP     = "CONDUIT_IP"
