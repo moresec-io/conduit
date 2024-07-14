@@ -41,7 +41,7 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 		return nil, errors.New("illegal addrs")
 	}
 	var (
-		network string
+		network string = dialconfig.Netwotk
 		addr    string
 	)
 	if index < len(dialconfig.Addrs) {
@@ -50,7 +50,7 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 		addr = dialconfig.Addrs[0]
 	}
 
-	if !dialconfig.TLS.Enable {
+	if dialconfig.TLS == nil || !dialconfig.TLS.Enable {
 		conn, err := net.Dial(network, addr)
 		if err != nil {
 			return nil, err
@@ -89,7 +89,7 @@ func ConvertConfig(dial *config.Dial) (*DialConfig, error) {
 		Netwotk: dial.Network,
 		Addrs:   dial.Addrs,
 	}
-	if dial.TLS.Enable {
+	if dial.TLS != nil && dial.TLS.Enable {
 		// load all certs to dial
 		certs := []tls.Certificate{}
 		for _, certFile := range dial.TLS.Certs {

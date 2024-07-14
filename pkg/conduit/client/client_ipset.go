@@ -14,7 +14,6 @@ import (
 )
 
 func (client *Client) setIPSet() error {
-	client.finiIPSet("destroy ipset before init")
 	err := client.initIPSet()
 	if err != nil {
 		return err

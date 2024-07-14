@@ -19,7 +19,6 @@ import (
 )
 
 func (client *Client) setTables() error {
-	client.finiTables("flush tables before init")
 	err := client.initTables()
 	if err != nil {
 		return err

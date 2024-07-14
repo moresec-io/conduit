@@ -120,25 +120,28 @@ func NewClient(conf *config.Config) (*Client, error) {
 }
 
 func (client *Client) Work() error {
+	// set up proxy
 	err := client.proxy()
 	if err != nil {
 		return err
 	}
+	// clear legacies
+	client.finiTables("flush tables before init")
+	client.finiIPSet("destroy ipset before init")
+
+	// set
 	err = client.setIPSet()
 	if err != nil {
 		return err
 	}
-
 	err = client.setTables()
 	if err != nil {
 		return err
 	}
-
 	err = client.setProc()
 	if err != nil {
 		return err
 	}
-
 	err = client.setStaticPolicies()
 	if err != nil {
 		return err
@@ -289,6 +292,7 @@ func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
 		ctx.dial = policy
 	default:
 		// failed to get mask, maybe fwmark_accept not enabled, we must iterate policies
+		return errors.New("policy not found")
 	}
 	if policy.dstTo != "" {
 		ctx.dstTo = policy.dstTo

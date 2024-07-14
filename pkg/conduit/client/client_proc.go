@@ -28,6 +28,10 @@ func (client *Client) setProc() error {
 				if err != nil {
 					log.Errorf("client set proc, init proc err: %s", err)
 				}
+				err = client.iniSysctl()
+				if err != nil {
+					log.Errorf("client set proc, init sysctl err: %s", err)
+				}
 			case <-client.quit:
 				return
 			}
@@ -45,6 +49,18 @@ func (client *Client) initProc() error {
 		return err
 	}
 	log.Debugf("client init proc, enable route local net success, stdout: %s, stderr: %s",
+		infoO, strings.TrimSuffix(string(infoE), "\n"))
+	return nil
+}
+
+func (client *Client) iniSysctl() error {
+	infoO, infoE, err := utils.EnableFWMark()
+	if err != nil {
+		log.Errorf("client init proc, enable fwmark err: %s, stdout: %s, stderr: %s",
+			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
+		return err
+	}
+	log.Debugf("client init proc, enable fwmark success, stdout: %s, stderr: %s",
 		infoO, strings.TrimSuffix(string(infoE), "\n"))
 	return nil
 }
