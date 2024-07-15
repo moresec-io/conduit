@@ -292,6 +292,21 @@ func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
 		ctx.dial = policy
 	default:
 		// failed to get mask, maybe fwmark_accept not enabled, we must iterate policies
+		policy, ok = client.ipPolicies[ctx.dstIp]
+		if ok {
+			ctx.dial = policy
+			break
+		}
+		policy, ok = client.ipportPolicies[ctx.dst]
+		if ok {
+			ctx.dial = policy
+			break
+		}
+		policy, ok = client.portPolicies[ctx.dstPort]
+		if ok {
+			ctx.dial = policy
+			break
+		}
 		return errors.New("policy not found")
 	}
 	if policy.dstTo != "" {

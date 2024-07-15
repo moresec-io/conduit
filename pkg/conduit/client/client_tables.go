@@ -106,58 +106,60 @@ func (client *Client) initTables() error {
 	userDefined := iptables.ChainTypeUserDefined
 	userDefined.SetName(ConduitChain)
 
-	// add ipset match mark, ipport > port > ip
-	// ip set match and set mark
-	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
-		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
-		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).Check()
-	if err != nil {
-		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
-		return err
-	}
-	if !exist {
-		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+	/*
+		// add ipset match mark, ipport > port > ip
+		// ip set match and set mark
+		exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
-			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).Insert()
+			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).Check()
 		if err != nil {
-			log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
-	}
-	// port set match and set mark
-	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
-		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
-		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).Check()
-	if err != nil {
-		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
-		return err
-	}
-	if !exist {
-		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		if !exist {
+			err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+				MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
+				TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).Insert()
+			if err != nil {
+				log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+				return err
+			}
+		}
+		// port set match and set mark
+		exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
-			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).Insert()
+			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).Check()
 		if err != nil {
-			log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
-	}
-	// ipport set match and set mark
-	exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
-		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
-		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).Check()
-	if err != nil {
-		log.Errorf("client init tables, check ipport target mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
-		return err
-	}
-	if !exist {
-		err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+		if !exist {
+			err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+				MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
+				TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).Insert()
+			if err != nil {
+				log.Errorf("client init tables, insert mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+				return err
+			}
+		}
+		// ipport set match and set mark
+		exist, err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 			MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
-			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).Insert()
+			TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).Check()
 		if err != nil {
-			log.Errorf("client init tables, insert ipport target mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+			log.Errorf("client init tables, check ipport target mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 			return err
 		}
-	}
+		if !exist {
+			err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
+				MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
+				TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).Insert()
+			if err != nil {
+				log.Errorf("client init tables, insert ipport target mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
+				return err
+			}
+		}
+	*/
 
 	// add ipset match and dnat, ipport > port > ip
 	// dnat ip port
