@@ -1,0 +1,42 @@
+server:
+  enable: true
+  listen:
+    network: tcp
+    addr: 0.0.0.0:5053
+    tls:
+      enable: false
+      mtls: false
+      cas:
+        - ./cert/ca/ca.crt
+      certs:
+        - cert: ./cert/server/server.crt
+          key: ./cert/server/server.key
+
+client:
+  enable: true
+  listen: 127.0.0.1:5052
+  check_time: 60
+  server_port: 5053
+  policies:
+    - dst: :5201 # all traffic to :5201 will be forwared by proxy 172.168.0.16:5053 to 127.0.0.1:5201
+      dst_to: 127.0.0.1:5201
+      proxy:
+        network: tcp
+        addrs:
+          - 172.168.0.16:5053
+  default_proxy: # if policy has not specified proxy, then the default_proxy will be used
+    network: tcp
+    server_port: 5053
+    tls:
+      enable: false
+      mtls: false
+      cas:
+        - ./cert/ca/ca.crt
+      certs:
+        - cert: ./cert/client/client.crt
+          key: ./cert/client/client.key
+
+log:
+  maxsize: 10
+  level: info
+  file: ./conduit.log
