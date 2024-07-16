@@ -11,17 +11,18 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
-	"github.com/moresec-io/conduit/pkg/tproxy"
 	"github.com/moresec-io/conduit/pkg/utils"
 )
 
@@ -178,13 +179,13 @@ func (client *Client) proxy() error {
 		return err
 	}
 	rp, err := rproxy.NewRProxy(listener,
+		rproxy.OptionRProxyAcceptConn(client.tproxyAcceptConn),
 		rproxy.OptionRProxyPostAccept(client.tproxyPostAccept),
 		rproxy.OptionRProxyPreDial(client.tproxyPreDial),
 		rproxy.OptionRProxyPostDial(client.tproxyPostDial),
 		rproxy.OptionRProxyPreWrite(client.tproxyPreWrite),
-		rproxy.OptionRProxyReplaceDst(tproxy.AcquireOriginalDst),
-		rproxy.OptionRProxyDial(client.tproxyDial),
-		rproxy.OptionRProxyHandleConn(client.handleConn))
+		rproxy.OptionRProxyReplaceDst(client.tproxyReplaceDst),
+		rproxy.OptionRProxyDial(client.tproxyDial))
 	if err != nil {
 		return err
 	}
@@ -207,13 +208,101 @@ type ctx struct {
 	dstIp   string // real dst ip
 	dstPort int    // real dst port
 	dst     string // real dst in string
+	mark    uint32
 	// proxy info
 	dial  *policy // proxy
 	dstTo string  // dst after proxy
 }
 
-func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
+const (
+	SO_ORIGINAL_DST = 80
+)
+
+func (client *Client) tproxyAcceptConn(conn net.Conn) ([]interface{}, error) {
+	var err error
+	var meta []interface{}
+	// findout original dst
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		if err = conn.Close(); err != nil {
+			log.Errorf("close non tcp conn err: %s", err)
+		}
+		return nil, err
+	}
+
+	tcpFile, err := tcpConn.File()
+	if err != nil {
+		log.Errorf("get tcp file from tcp conn err: %s", err)
+		if err = tcpConn.Close(); err != nil {
+			log.Errorf("close tcp conn err: %s", err)
+		}
+		return nil, err
+	}
+	if err = tcpConn.Close(); err != nil {
+		log.Errorf("close tcp conn err: %s", err)
+		if err = tcpFile.Close(); err != nil {
+			log.Errorf("close tcp file err: %s", err)
+		}
+		return nil, err
+	}
+	// mark
+	mark, err := utils.GetSocketMark(tcpFile.Fd())
+	if err != nil {
+		log.Warnf("handle conn, get socket mark err: %s", err)
+	}
+	// original dst
+	mreq, err := syscall.GetsockoptIPv6Mreq(
+		int(tcpFile.Fd()),
+		syscall.IPPROTO_IP,
+		SO_ORIGINAL_DST)
+	if err != nil {
+		log.Errorf("get sock opt ipv6 mreq err: %s", err)
+		if err = tcpFile.Close(); err != nil {
+			log.Errorf("close tcp file err: %s", err)
+		}
+		return nil, err
+	}
+
+	ipv4 := net.IPv4(
+		mreq.Multiaddr[4],
+		mreq.Multiaddr[5],
+		mreq.Multiaddr[6],
+		mreq.Multiaddr[7])
+	port := uint16(mreq.Multiaddr[2])<<8 + uint16(mreq.Multiaddr[3])
+	originalDst, _ := net.ResolveTCPAddr("tcp4",
+		fmt.Sprintf("%s:%d", ipv4.String(), port))
+
+	//restore conn
+	fileConn, err := net.FileConn(tcpFile)
+	if err != nil {
+		log.Errorf("get file conn from tcp file err: %s", err)
+		if err = tcpFile.Close(); err != nil {
+			log.Errorf("close tcp file err: %s", err)
+		}
+		return nil, err
+	}
+	if err = tcpFile.Close(); err != nil {
+		log.Errorf("close tcp file err: %s", err)
+	}
+
+	leftConn := fileConn.(*net.TCPConn)
+	meta = append(meta, leftConn, mark, originalDst)
+	return meta, nil
+}
+
+func (client *Client) tproxyReplaceDst(_ net.Conn, meta ...interface{}) (net.Addr, net.Conn, error) {
+	if len(meta) != 3 {
+		return nil, nil, errors.New("illegal meta")
+	}
+	return meta[2].(net.Addr), meta[0].(net.Conn), nil
+}
+
+func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (interface{}, error) {
 	log.Debugf("client tproxy post accept, src: %s, dst: %s", src.String(), dst.String())
+	if len(meta) != 3 {
+		return nil, errors.New("illegal meta")
+	}
+
 	ipPort := strings.Split(src.String(), ":")
 	srcIp := ipPort[0]
 	srcPort, err := strconv.Atoi(ipPort[1])
@@ -221,6 +310,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		log.Errorf("client tproxy post accept, src port to int err: %s", err)
 		return nil, err
 	}
+
 	ipPort = strings.Split(dst.String(), ":")
 	dstIp := ipPort[0]
 	dstPort, err := strconv.Atoi(ipPort[1])
@@ -237,57 +327,28 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr) (interface{}, error) {
 		dst:     dst.String(),
 		dstTo:   dstIp + ":" + strconv.Itoa(dstPort),
 	}
-	return ctx, nil
-}
 
-func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
-	var err error
-	tcpConn, ok := conn.(*net.TCPConn)
-	if !ok {
-		if err = conn.Close(); err != nil {
-			log.Errorf("handle conn, close non tcp conn err: %s", err)
-		}
-		return err
-	}
-	tcpFile, err := tcpConn.File()
-	if err != nil {
-		log.Errorf("handle conn, get tcp file from tcp conn err: %s", err)
-		if err = tcpConn.Close(); err != nil {
-			log.Errorf("handle conn, close tcp conn err: %s", err)
-		}
-		return err
-	}
-	if err = tcpConn.Close(); err != nil {
-		log.Errorf("handle conn, close tcp conn err: %s", err)
-		if err = tcpFile.Close(); err != nil {
-			log.Errorf("handle conn, close tcp file err: %s", err)
-		}
-		return err
-	}
-	mark, err := utils.GetSocketMark(tcpFile.Fd())
-	if err != nil {
-		log.Warnf("handle conn, get socket mark err: %s", err)
-	}
-	ctx := custom.(*ctx)
+	mark := meta[1].(uint32)
 	var policy *policy
+	var ok bool
 	switch mark {
 	case uint32(config.MarkIpsetIP):
 		// manager policy
 		policy, ok = client.ipPolicies[ctx.dstIp]
 		if !ok {
-			return errors.New("policy not found")
+			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	case uint32(config.MarkIpsetIPPort):
 		policy, ok = client.ipportPolicies[ctx.dst]
 		if !ok {
-			return errors.New("policy not found")
+			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	case uint32(config.MarkIpsetPort):
 		policy, ok = client.portPolicies[ctx.dstPort]
 		if !ok {
-			return errors.New("policy not found")
+			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	default:
@@ -307,12 +368,12 @@ func (client *Client) handleConn(conn net.Conn, custom interface{}) error {
 			ctx.dial = policy
 			break
 		}
-		return errors.New("policy not found")
+		return nil, errors.New("policy not found")
 	}
 	if policy.dstTo != "" {
 		ctx.dstTo = policy.dstTo
 	}
-	return nil
+	return ctx, nil
 }
 
 func (client *Client) tproxyPreDial(custom interface{}) error {

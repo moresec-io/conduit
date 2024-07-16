@@ -65,7 +65,7 @@ func (server *Server) proxy() error {
 	return nil
 }
 
-func (server *Server) replaceDstfunc(conn net.Conn) (net.Addr, net.Conn, error) {
+func (server *Server) replaceDstfunc(conn net.Conn, meta ...interface{}) (net.Addr, net.Conn, error) {
 	bs := make([]byte, 4)
 	_, err := io.ReadFull(conn, bs)
 	if err != nil {
