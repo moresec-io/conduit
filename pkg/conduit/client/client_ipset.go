@@ -108,33 +108,33 @@ func (client *Client) DelIPSetIP(ip net.IP) error {
 	return err
 }
 
-func (client *Client) finiIPSet(prefix string) error {
+func (client *Client) finiIPSet(level log.Level, prefix string) error {
 	// flush
 	err := netlink.IpsetFlush(ConduitIPSetIPPort)
 	if err != nil {
-		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
+		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetFlush(ConduitIPSetPort)
 	if err != nil {
-		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
+		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetFlush(ConduitIPSetIP)
 	if err != nil {
-		log.Warnf("%s, flush ipset: %s err: %s", prefix, ConduitIPSetIP, err)
+		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetIP, err)
 	}
 
 	// destroy
 	err = netlink.IpsetDestroy(ConduitIPSetPort)
 	if err != nil {
-		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetPort, err)
+		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetDestroy(ConduitIPSetIPPort)
 	if err != nil {
-		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIPPort, err)
+		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIPPort, err)
 	}
 	err = netlink.IpsetDestroy(ConduitIPSetIP)
 	if err != nil {
-		log.Warnf("%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIP, err)
+		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIP, err)
 	}
 	return nil
 }

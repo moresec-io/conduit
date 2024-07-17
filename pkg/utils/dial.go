@@ -103,7 +103,7 @@ func ConvertConfig(dial *config.Dial) (*DialConfig, error) {
 		tls := &TLS{
 			Enable:             true,
 			Certs:              certs,
-			InsecureSkipVerify: dialConfig.TLS.InsecureSkipVerify,
+			InsecureSkipVerify: dial.TLS.InsecureSkipVerify,
 		}
 		if dial.TLS.MTLS {
 			// mtls, dial with our certs

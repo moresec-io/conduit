@@ -9,6 +9,7 @@ package client
 import (
 	"testing"
 
+	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 )
 
@@ -39,5 +40,5 @@ func TestUnSetTables(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	client.finiTables("client fini tables")
+	client.finiTables(log.LevelError, "client fini tables")
 }

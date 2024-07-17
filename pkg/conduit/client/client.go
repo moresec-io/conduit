@@ -127,8 +127,8 @@ func (client *Client) Work() error {
 		return err
 	}
 	// clear legacies
-	client.finiTables("flush tables before init")
-	client.finiIPSet("destroy ipset before init")
+	client.finiTables(log.LevelDebug, "flush tables before init")
+	client.finiIPSet(log.LevelDebug, "destroy ipset before init")
 
 	// set
 	err = client.setIPSet()
@@ -197,8 +197,8 @@ func (client *Client) proxy() error {
 func (client *Client) Close() {
 	client.rp.Close()
 	close(client.quit)
-	client.finiTables("client fini tables")
-	client.finiIPSet("client fini ipset")
+	client.finiTables(log.LevelWarn, "client fini tables")
+	client.finiIPSet(log.LevelWarn, "client fini ipset")
 }
 
 type ctx struct {

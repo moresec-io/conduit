@@ -216,14 +216,14 @@ func (client *Client) initTables() error {
 	return nil
 }
 
-func (client *Client) finiTables(prefix string) {
+func (client *Client) finiTables(level log.Level, prefix string) {
 	ipt := iptables.NewIPTables()
 	// delete the mark
 	err := ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
 		MatchIPv4().MatchProtocol(false, network.ProtocolTCP).MatchMark(false, config.MarkIgnoreOurself).
 		OptionWait(0).TargetAccept().Delete()
 	if err != nil {
-		log.Debugf("%s, delete mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	userDefined := iptables.ChainTypeUserDefined
@@ -234,20 +234,20 @@ func (client *Client) finiTables(prefix string) {
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete ip ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete ip ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// delete port mark
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete port ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete port ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete ipport ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete ipport ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// delete dnats
 	// dnat port
@@ -255,47 +255,47 @@ func (client *Client) finiTables(prefix string) {
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetPort, iptables.FlagDst)).OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip port
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIPPort, iptables.FlagDst, iptables.FlagDst)).OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip
 	err = ipt.Table(iptables.TableTypeNat).Chain(userDefined).MatchProtocol(false, network.ProtocolTCP).
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).Delete()
 	if err != nil {
-		log.Debugf("%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// flush conduit chain
 	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
 		OptionWait(0).Flush()
 	if err != nil {
-		log.Debugf("%s, flush conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, flush conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// delete jump conduit, NAT-PREROUTING
 	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypePREROUTING).
 		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
 	if err != nil {
-		log.Debugf("%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// delete jump conduit, NAT-OUTPUT
 	err = ipt.Table(iptables.TableTypeNat).Chain(iptables.ChainTypeOUTPUT).
 		OptionWait(0).TargetJumpChain(ConduitChain).Delete()
 	if err != nil {
-		log.Debugf("%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete jump conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 
 	// delete conduit chain
 	err = ipt.Table(iptables.TableTypeNat).UserDefinedChain(ConduitChain).
 		OptionWait(0).Delete()
 	if err != nil {
-		log.Debugf("%s, delete conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+		log.Printf(level, "%s, delete conduit chain err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 }

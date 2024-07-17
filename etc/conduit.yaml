@@ -24,12 +24,22 @@ client:
         network: tcp
         addrs:
           - 172.168.0.16:5053
+        tls:
+          enable: true
+          mtls: true
+          cas:
+            - ./cert/ca/ca.crt
+          certs:
+            - cert: ./cert/client/client.crt
+              key: ./cert/client/client.key
+          insecure_skip_verify: true
+
   default_proxy: # if policy has not specified proxy, then the default_proxy will be used
     network: tcp
     server_port: 5053
     tls:
-      enable: false
-      mtls: false
+      enable: true
+      mtls: true
       cas:
         - ./cert/ca/ca.crt
       certs:
