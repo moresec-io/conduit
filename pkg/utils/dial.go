@@ -62,6 +62,7 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 				Certificates: dialconfig.TLS.Certs,
 				// it's user's call to verify the server certs or not.
 				InsecureSkipVerify: dialconfig.TLS.InsecureSkipVerify,
+				RootCAs:            dialconfig.TLS.CAPool,
 			})
 			if err != nil {
 				log.Errorf("tls dial err: %s, network: %s, addr: %s", err, network, addr)
