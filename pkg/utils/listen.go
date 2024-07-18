@@ -63,7 +63,7 @@ func Listen(listen *config.Listen) (net.Listener, error) {
 			// mtls, require for edge cert
 			// load all ca certs to pool
 			caPool := x509.NewCertPool()
-			for _, caFile := range listen.TLS.CACerts {
+			for _, caFile := range listen.TLS.CAs {
 				ca, err := os.ReadFile(caFile)
 				if err != nil {
 					klog.Errorf("listen read ca cert err: %s, file: %s", err, caFile)

@@ -9,7 +9,7 @@ type CertKey struct {
 type TLS struct {
 	Enable             bool      `yaml:"enable" json:"enable"`
 	MTLS               bool      `yaml:"mtls" json:"mtls"`
-	CACerts            []string  `yaml:"ca_certs" json:"ca_certs"`                         // ca certs paths
+	CAs                []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
 	Certs              []CertKey `yaml:"certs" json:"certs"`                               // certs paths
 	InsecureSkipVerify bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
 }
@@ -17,11 +17,11 @@ type TLS struct {
 type Listen struct {
 	Network string `yaml:"network" json:"network"`
 	Addr    string `yaml:"addr" json:"addr"`
-	TLS     TLS    `yaml:"tls,omitempty" json:"tls"`
+	TLS     *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
 }
 
 type Dial struct {
 	Network string   `yaml:"network" json:"network"`
 	Addrs   []string `yaml:"addrs" json:"addrs"`
-	TLS     TLS      `yaml:"tls,omitempty" json:"tls"`
+	TLS     *TLS     `yaml:"tls,omitempty" json:"tls"`
 }

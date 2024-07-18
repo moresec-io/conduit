@@ -1,0 +1,9 @@
+[req]
+distinguished_name=req_distinguished_name
+[req_distinguished_name]
+
+[ v3_req ]
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 172.168.0.16

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestListNetwork(t *testing.T) {
+func TestListNetworks(t *testing.T) {
 	ipNets, err := ListNetworks()
 	assert.Equal(t, nil, err)
 	for _, ipNet := range ipNets {
