@@ -15,7 +15,7 @@ openssl req -x509 -new -nodes -key ca/ca.key -sha256 -days $DAYS -out ca/ca.crt 
 
 # Step 2: Generate server's private key and certificate signing request (CSR)
 openssl genpkey -algorithm RSA -out server/server.key
-openssl req -new -key server/server.key -out server/server.csr -subj "/CN=$SERVER_IP"
+openssl req -new -key server/server.key -out server/server.csr -subj "/CN=$CA_CN"
 
 # Step 3: Create a config file for the server certificate with the IP SAN
 cat > server/server.cnf <<EOF
