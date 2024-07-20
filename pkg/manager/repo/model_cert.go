@@ -7,7 +7,7 @@ const (
 
 type Cert struct {
 	ID                      uint64   `gorm:"id"`
-	SNI                     string   `gorm:"sni;index:sni"` // server name indication
+	SNI                     string   `gorm:"sni;index:idx_sni"` // server name indication
 	CommonName              string   `gorm:"common_name"`
 	SubjectAlternativeNames []string `gorm:"subject_alternative_names"`
 	Days                    int      `gorm:"days"`

@@ -97,7 +97,7 @@ func Init() error {
 }
 
 func initCmd() error {
-	flag.StringVar(&file, "f", defaultFile, "configuration file")
+	flag.StringVar(&file, "c", defaultFile, "configuration file")
 	flag.BoolVar(&h, "h", false, "help")
 	flag.Parse()
 	if h {

@@ -7,11 +7,11 @@ type CertKey struct {
 }
 
 type TLS struct {
-	Enable             bool      `yaml:"enable" json:"enable"`
-	MTLS               bool      `yaml:"mtls" json:"mtls"`
-	CAs                []string  `yaml:"cas" json:"cas"`                                   // ca certs paths
-	Certs              []CertKey `yaml:"certs" json:"certs"`                               // certs paths
-	InsecureSkipVerify bool      `yaml:"insecure_skip_verify" json:"insecure_skip_verify"` // for client use
+	Enable             bool      `yaml:"enable,omitempty" json:"enable"`
+	MTLS               bool      `yaml:"mtls,omitempty" json:"mtls"`
+	CAs                []string  `yaml:"cas" json:"cas"`                                             // ca certs paths
+	Certs              []CertKey `yaml:"certs" json:"certs"`                                         // certs paths
+	InsecureSkipVerify bool      `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify"` // for client use
 }
 
 type Listen struct {
