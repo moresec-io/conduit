@@ -37,6 +37,8 @@ type DB struct {
 type Config struct {
 	Listen config.Listen `yaml:"listen"`
 
+	DB DB `yaml:"db"`
+
 	Log struct {
 		Level    string `yaml:"level"`
 		File     string `yaml:"file"`
