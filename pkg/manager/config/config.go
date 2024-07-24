@@ -34,10 +34,23 @@ type DB struct {
 	TLS         *config.TLS `yaml:"tls"`
 }
 
+type Cert struct {
+	CA struct {
+		NotAfter     string `yaml:"not_after"` // 0,1,0 means 0 year 1 month 0 day
+		CommonName   string `yaml:"common_name"`
+		Organization string `yaml:"organization"`
+	}
+	Cert struct {
+		NotAfter string `yaml:"not_after"`
+	}
+}
+
 type Config struct {
 	Listen config.Listen `yaml:"listen"`
 
 	DB DB `yaml:"db"`
+
+	Cert Cert `yaml:"cert"`
 
 	Log struct {
 		Level    string `yaml:"level"`

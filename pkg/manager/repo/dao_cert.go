@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// CA
 func (dao *dao) CreateCA(ca *CA) error {
 	tx := dao.db.Model(&CA{})
 	if dao.conf.Debug {
@@ -14,6 +15,20 @@ func (dao *dao) CreateCA(ca *CA) error {
 	return tx.Create(ca).Error
 }
 
+func (dao *dao) GetCA() (*CA, error) {
+	tx := dao.db.Model(&CA{})
+	if dao.conf.Debug {
+		tx = tx.Debug()
+	}
+	ca := &CA{}
+	tx.Where("deleted", false).Limit(1).Find(ca)
+	if tx.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return ca, tx.Error
+}
+
+// Cert
 func (dao *dao) CreateCert(cert *Cert) error {
 	tx := dao.db.Model(&Cert{})
 	if dao.conf.Debug {
@@ -39,12 +54,12 @@ func (dao *dao) GetCert(sni string) (*Cert, error) {
 	}
 	tx = tx.Where("sni = ?", sni).Where("deleted = ?", false).Limit(1)
 
-	var cert Cert
-	tx = tx.Find(&cert)
+	cert := &Cert{}
+	tx = tx.Find(cert)
 	if tx.RowsAffected == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return &cert, tx.Error
+	return cert, tx.Error
 }
 
 func (dao *dao) ListCert(query *CertQuery) ([]*Cert, error) {

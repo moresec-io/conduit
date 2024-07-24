@@ -9,12 +9,42 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/moresec-io/conduit/pkg/manager/config"
+	"github.com/moresec-io/conduit/pkg/manager/repo"
+	"gorm.io/gorm"
 )
 
-type CMS struct{}
+type CMS struct {
+	repo repo.Repo
+	conf *config.Config
+}
+
+func NewCMS(conf *config.Config, repo repo.Repo) (*CMS, error) {
+	ca, err := repo.GetCA()
+	if err != nil {
+
+	}
+}
+
+func (cms *CMS) init() error {
+	ca, err := cms.repo.GetCA()
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+	if err == gorm.ErrRecordNotFound {
+		cert, key, err := cms.GenCA(cms.conf.Cert.CA.NotAfter)
+		if err != nil {
+			return err
+		}
+		cms.repo.CreateCA(&repo.CA{
+			CommonName: cms.conf.Cert.CA.CommonName,
+		})
+	}
+}
 
 // notAfter: 1,2,3 means now add 1 year 2 months and 3 days
-func (cms *CMS) GenCA(notAfter string) ([]byte, []byte, error) {
+func (cms *CMS) GenCA(notAfter string, organization, commonName string) ([]byte, []byte, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
@@ -30,8 +60,8 @@ func (cms *CMS) GenCA(notAfter string) ([]byte, []byte, error) {
 	catemplate := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Conduit"},
-			CommonName:   "Conduit CA",
+			Organization: []string{organization},
+			CommonName:   commonName,
 		},
 		NotBefore:             now,
 		NotAfter:              now.AddDate(years, months, days),
