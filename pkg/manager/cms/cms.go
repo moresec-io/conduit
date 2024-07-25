@@ -78,6 +78,10 @@ func (cms *CMS) init() error {
 			return err
 		}
 	} else if ca.Expiration <= now.Unix() {
+		err = cms.repo.DeleteCA(ca.ID)
+		if err != nil {
+			return err
+		}
 		expiration, err = initCA()
 		if err != nil {
 			return err
@@ -170,6 +174,10 @@ func (cms *CMS) GenCert(cacert []byte, cakey []byte, notAfter string) ([]byte, [
 	}
 	return signcert, x509.MarshalPKCS1PrivateKey(signkey), nil
 }
+
+func (cms *CMS) genCert(cacert, cakey []byte,
+	notBefore, notAfter time.Time,
+	organization, commonName string)
 
 func getDate(str string) (int, int, int) {
 	elems := strings.Split(str, ",")

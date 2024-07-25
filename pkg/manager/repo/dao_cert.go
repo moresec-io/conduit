@@ -28,6 +28,16 @@ func (dao *dao) GetCA() (*CA, error) {
 	return ca, tx.Error
 }
 
+func (dao *dao) DeleteCA(id uint64) error {
+	tx := dao.db.Model(&CA{})
+	if dao.conf.Debug {
+		tx = tx.Debug()
+	}
+	tx = tx.Where("id", id)
+	now := time.Now().Unix()
+	return tx.Updates(map[string]interface{}{"update_time": now, "deleted": true}).Error
+}
+
 // Cert
 func (dao *dao) CreateCert(cert *Cert) error {
 	tx := dao.db.Model(&Cert{})
@@ -44,7 +54,7 @@ func (dao *dao) DeleteCert(delete *CertDelete) error {
 	}
 	tx = buildCertDelete(tx, delete)
 	now := time.Now().Unix()
-	return tx.Updates(map[string]interface{}{"delete_time": now, "deleted": true}).Error
+	return tx.Updates(map[string]interface{}{"update_time": now, "deleted": true}).Error
 }
 
 func (dao *dao) GetCert(sni string) (*Cert, error) {
