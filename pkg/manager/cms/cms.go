@@ -10,42 +10,101 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/manager/config"
 	"github.com/moresec-io/conduit/pkg/manager/repo"
+	"github.com/singchia/go-timer/v2"
 	"gorm.io/gorm"
 )
 
 type CMS struct {
 	repo repo.Repo
 	conf *config.Config
+	tmr  timer.Timer
 }
 
 func NewCMS(conf *config.Config, repo repo.Repo) (*CMS, error) {
-	ca, err := repo.GetCA()
-	if err != nil {
-
+	cms := &CMS{
+		repo: repo,
+		conf: conf,
+		tmr:  timer.NewTimer(),
 	}
+	err := cms.init()
+	if err != nil {
+		log.Errorf("newcms init err: %s", err)
+		return nil, err
+	}
+	return cms, nil
 }
 
 func (cms *CMS) init() error {
-	ca, err := cms.repo.GetCA()
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return err
+	caconf := cms.conf.Cert.CA
+	now := time.Now()
+
+	initCA := func() (int64, error) {
+		years, months, days := getDate(caconf.NotAfter)
+		notBefore, notAfter := now, now.AddDate(years, months, days)
+		cert, key, err := cms.genCA(notBefore, notAfter,
+			caconf.Organization, caconf.CommonName, 2048)
+		if err != nil {
+			return 0, err
+		}
+		ca := &repo.CA{
+			Organization: caconf.Organization,
+			CommonName:   caconf.CommonName,
+			NotAfter:     caconf.NotAfter,
+			Expiration:   notAfter.Unix(),
+			Cert:         string(cert),
+			Key:          string(key),
+			Deleted:      false,
+			CreateTime:   now.Unix(),
+			UpdateTime:   now.Unix(),
+		}
+		err = cms.repo.CreateCA(ca)
+		if err != nil {
+			return 0, err
+		}
+		return int64(notAfter.Sub(notBefore).Seconds()), nil
 	}
-	if err == gorm.ErrRecordNotFound {
-		cert, key, err := cms.GenCA(cms.conf.Cert.CA.NotAfter)
+	var expiration int64
+	ca, err := cms.repo.GetCA()
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			expiration, err = initCA()
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	} else if ca.Expiration <= now.Unix() {
+		expiration, err = initCA()
 		if err != nil {
 			return err
 		}
-		cms.repo.CreateCA(&repo.CA{
-			CommonName: cms.conf.Cert.CA.CommonName,
-		})
 	}
+
+	cms.tmr.Add(time.Duration(expiration)*time.Second, timer.WithHandler(func(e *timer.Event) {
+		err = cms.init()
+		if err != nil {
+			log.Errorf("cms init err: %s", err)
+		}
+	}))
+	return nil
 }
 
 // notAfter: 1,2,3 means now add 1 year 2 months and 3 days
-func (cms *CMS) GenCA(notAfter string, organization, commonName string) ([]byte, []byte, error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+func (cms *CMS) GenCA(notAfterStr string, organization, commonName string) ([]byte, []byte, error) {
+	years, months, days := getDate(notAfterStr)
+	notBefore := time.Now()
+	notAfter := notBefore.AddDate(years, months, days)
+	return cms.genCA(notBefore, notAfter, organization, commonName, 2048)
+}
+
+func (cms *CMS) genCA(notBefore, notAfter time.Time,
+	organization, commonName string, bits int) ([]byte, []byte, error) {
+
+	key, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,16 +114,14 @@ func (cms *CMS) GenCA(notAfter string, organization, commonName string) ([]byte,
 		return nil, nil, err
 	}
 
-	years, months, days := getDate(notAfter)
-	now := time.Now()
 	catemplate := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{organization},
 			CommonName:   commonName,
 		},
-		NotBefore:             now,
-		NotAfter:              now.AddDate(years, months, days),
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,

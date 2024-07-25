@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
 	"github.com/natefinch/lumberjack"
-	"github.com/singchia/go-hammer/log"
 	"gopkg.in/yaml.v2"
 )
 
