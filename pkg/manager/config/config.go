@@ -1,9 +1,3 @@
-/*
- * Apache License 2.0
- *
- * Copyright (c) 2022, Moresec Inc.
- * All rights reserved.
- */
 package config
 
 import (
@@ -14,7 +8,6 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
-
 	"github.com/natefinch/lumberjack"
 	"gopkg.in/yaml.v2"
 )
@@ -25,51 +18,39 @@ var (
 
 	h           bool
 	file        string
-	defaultFile string = "./conduit.yaml"
+	defaultFile string = "./conduit_manager.yaml"
 )
 
-var (
-	MarkIgnoreOurself = 1444
-	MarkIpsetIP       = 1445
-	MarkIpsetIPPort   = 1446
-	MarkIpsetPort     = 1447
-)
-
-type Manager struct {
-	Enable bool        `yaml:"enable"`
-	Dial   config.Dial `yaml:"dial"`
+type DB struct {
+	Driver      string      `yaml:"driver"`
+	Username    string      `yaml:"username"`
+	Password    string      `yaml:"password"`
+	Address     string      `yaml:"address"`
+	DB          string      `yaml:"db"`
+	Options     string      `yaml:"options"`
+	MaxIdleConn int64       `yaml:"max_idle_conn"`
+	MaxOpenConn int64       `yaml:"max_open_conn"`
+	Debug       bool        `yaml:"debug"`
+	TLS         *config.TLS `yaml:"tls"`
 }
 
-type Server struct {
-	Enable bool          `yaml:"enable"`
-	Listen config.Listen `yaml:"listen"`
-}
-
-type Policy struct {
-	Dst   string       `yaml:"dst"`              // :9092
-	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 代理
-	DstTo string       `yaml:"dst_to,omitempty"` // 127.0.0.1:9092
-}
-
-// TLS > Default TLS
-type Client struct {
-	Enable       bool     `yaml:"enable"`
-	Listen       string   `yaml:"listen"` // for tcp transparent
-	CheckTime    int      `yaml:"check_time"`
-	Policies     []Policy `yaml:"policies"`
-	DefaultProxy struct {
-		Network    string      `yaml:"network"`
-		ServerPort int         `yaml:"server_port"` // server addr is combined by dst:server_port
-		TLS        *config.TLS `yaml:"tls,omitempty"`
-	} `yaml:"default_proxy"`
+type Cert struct {
+	CA struct {
+		NotAfter     string `yaml:"not_after"` // 0,1,0 means 0 year 1 month 0 day
+		CommonName   string `yaml:"common_name"`
+		Organization string `yaml:"organization"`
+	}
+	Cert struct {
+		NotAfter string `yaml:"not_after"`
+	}
 }
 
 type Config struct {
-	Manager Manager `yaml:"manager"`
+	Listen config.Listen `yaml:"listen"`
 
-	Server Server `yaml:"server"`
+	DB DB `yaml:"db"`
 
-	Client Client `yaml:"client"`
+	Cert Cert `yaml:"cert"`
 
 	Log struct {
 		Level    string `yaml:"level"`
