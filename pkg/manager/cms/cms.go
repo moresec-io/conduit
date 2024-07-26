@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -54,8 +55,8 @@ func (cms *CMS) init() error {
 			CommonName:   caconf.CommonName,
 			NotAfter:     caconf.NotAfter,
 			Expiration:   notAfter.Unix(),
-			Cert:         string(cert),
-			Key:          string(key),
+			Cert:         cert,
+			Key:          key,
 			Deleted:      false,
 			CreateTime:   now.Unix(),
 			UpdateTime:   now.Unix(),
@@ -138,7 +139,20 @@ func (cms *CMS) genCA(notBefore, notAfter time.Time,
 	return ca, x509.MarshalPKCS1PrivateKey(key), nil
 }
 
-func (cms *CMS) GenCert(cacert []byte, cakey []byte, notAfter string) ([]byte, []byte, error) {
+func (cms *CMS) GenCert(notAfterStr string, organization, commonName string, san net.IP) ([]byte, []byte, error) {
+	years, months, days := getDate(notAfterStr)
+	notBefore := time.Now()
+	notAfter := notBefore.AddDate(years, months, days)
+	ca, err := cms.repo.GetCA()
+	if err != nil {
+		return nil, nil, err
+	}
+	return cms.genCert(ca.Cert, ca.Key, notBefore, notAfter, organization, commonName, san, 2048)
+}
+
+func (cms *CMS) genCert(cacert, cakey []byte,
+	notBefore, notAfter time.Time,
+	organization, commonName string, san net.IP, bits int) ([]byte, []byte, error) {
 	ca, err := x509.ParseCertificate(cacert)
 	if err != nil {
 		return nil, nil, err
@@ -148,7 +162,7 @@ func (cms *CMS) GenCert(cacert []byte, cakey []byte, notAfter string) ([]byte, [
 		return nil, nil, err
 	}
 
-	signkey, err := rsa.GenerateKey(rand.Reader, 2048)
+	signkey, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -156,17 +170,16 @@ func (cms *CMS) GenCert(cacert []byte, cakey []byte, notAfter string) ([]byte, [
 	if err != nil {
 		return nil, nil, err
 	}
-	now := time.Now()
-	years, months, days := getDate(notAfter)
 	certtemplate := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Conduit"},
-			CommonName:   "Conduit",
+			Organization: []string{organization},
+			CommonName:   commonName,
 		},
-		NotBefore: now,
-		NotAfter:  now.AddDate(years, months, days),
-		KeyUsage:  x509.KeyUsageDigitalSignature,
+		NotBefore:   notBefore,
+		NotAfter:    notAfter,
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		IPAddresses: []net.IP{san},
 	}
 	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, signkey.PublicKey, key)
 	if err != nil {
@@ -174,10 +187,6 @@ func (cms *CMS) GenCert(cacert []byte, cakey []byte, notAfter string) ([]byte, [
 	}
 	return signcert, x509.MarshalPKCS1PrivateKey(signkey), nil
 }
-
-func (cms *CMS) genCert(cacert, cakey []byte,
-	notBefore, notAfter time.Time,
-	organization, commonName string)
 
 func getDate(str string) (int, int, int) {
 	elems := strings.Split(str, ",")

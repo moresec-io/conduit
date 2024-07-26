@@ -11,8 +11,8 @@ type Cert struct {
 	CommonName              string   `gorm:"common_name"`
 	SubjectAlternativeNames []string `gorm:"subject_alternative_names"`
 	Days                    int      `gorm:"days"`
-	Cert                    string   `gorm:"cert;type:text"`
-	Key                     string   `gorm:"key;type:text"`
+	Cert                    []byte   `gorm:"cert;type:text"`
+	Key                     []byte   `gorm:"key;type:text"`
 	Deleted                 bool     `gorm:"deleted"`
 	CreateTime              int64    `gorm:"create_time"`
 	UpdateTime              int64    `gorm:"update_time"`
@@ -28,8 +28,8 @@ type CA struct {
 	CommonName   string `gorm:"common_name"`
 	NotAfter     string `gorm:"not_after"`
 	Expiration   int64  `gorm:"expiration"`
-	Cert         string `gorm:"cert;type:text"`
-	Key          string `gorm:"key;type:text"`
+	Cert         []byte `gorm:"cert;type:text"`
+	Key          []byte `gorm:"key;type:text"`
 	Deleted      bool   `gorm:"deleted"`
 	CreateTime   int64  `gorm:"create_time"`
 	UpdateTime   int64  `gorm:"update_time"`
