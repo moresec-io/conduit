@@ -1,9 +1,10 @@
 package repo
 
 type CertDelete struct {
-	SNI string
+	ID  uint64
+	SAN string
 }
 
 type CertQuery struct {
-	SNI string
+	SAN string
 }

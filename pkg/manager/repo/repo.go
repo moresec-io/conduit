@@ -9,11 +9,11 @@ type Repo interface {
 
 	CreateCert(cert *Cert) error
 	DeleteCert(delete *CertDelete) error
-	GetCert(sni string) (*Cert, error)
+	GetCert(san string) (*Cert, error)
 	ListCert(query *CertQuery) ([]*Cert, error)
 }
 
-func NewRepo(conf *config.DB) (Repo, error) {
+func NewRepo(conf *config.Config) (Repo, error) {
 	dao, err := NewDao(conf)
 	return dao, err
 }
