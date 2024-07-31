@@ -47,8 +47,18 @@ type Cert struct {
 	}
 }
 
-type Config struct {
+type ControlPlane struct {
 	Listen config.Listen `yaml:"listen"`
+}
+
+type ConduitManager struct {
+	Listen config.Listen `yaml:"listen"`
+}
+
+type Config struct {
+	ControlPlane ControlPlane `yaml:"control_plane"`
+
+	ConduitManager ConduitManager `yaml:"conduit_manager"`
 
 	DB DB `yaml:"db"`
 
