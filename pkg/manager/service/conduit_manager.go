@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"strings"
 
@@ -90,6 +91,13 @@ func (cm *ConduitManager) register(end geminio.End) error {
 	return nil
 }
 
-func (cm *ConduitManager) ReportConduit(context.Context, geminio.Request, geminio.Response) {}
+func (cm *ConduitManager) ReportConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	request := &proto.ReportConduitRequest{}
+	err := json.Unmarshal(req.Data(), request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+}
 
 func (cm *ConduitManager) PullCluster(context.Context, geminio.Request, geminio.Response) {}
