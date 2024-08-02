@@ -41,12 +41,24 @@ type Cert struct {
 		Organization string `yaml:"organization"`
 	}
 	Cert struct {
-		NotAfter string `yaml:"not_after"`
+		NotAfter     string `yaml:"not_after"`
+		CommonName   string `yaml:"common_name"`
+		Organization string `yaml:"organization"`
 	}
 }
 
-type Config struct {
+type ControlPlane struct {
 	Listen config.Listen `yaml:"listen"`
+}
+
+type ConduitManager struct {
+	Listen config.Listen `yaml:"listen"`
+}
+
+type Config struct {
+	ControlPlane ControlPlane `yaml:"control_plane"`
+
+	ConduitManager ConduitManager `yaml:"conduit_manager"`
 
 	DB DB `yaml:"db"`
 
@@ -60,21 +72,24 @@ type Config struct {
 	} `yaml:"log"`
 }
 
-func Init() error {
+func NewConfig() (*Config, error) {
 	time.LoadLocation("Asia/Shanghai")
 
 	err := initCmd()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = initConf()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = initLog()
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return Conf, err
 }
 
 func initCmd() error {

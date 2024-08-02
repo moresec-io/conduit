@@ -19,23 +19,24 @@ type dao struct {
 	conf *config.DB
 }
 
-func NewDao(conf *config.DB) (*dao, error) {
+func NewDao(conf *config.Config) (*dao, error) {
+	dbconf := &conf.DB
 	var (
 		db  *gorm.DB
 		err error
 	)
-	switch conf.Driver {
+	switch dbconf.Driver {
 	case DBDriverMySQL:
-		db, err = storage.NewMySQL(conf)
+		db, err = storage.NewMySQL(dbconf)
 		if err != nil {
 			return nil, err
 		}
-		if err = setMaxConn(db, conf.MaxOpenConn, conf.MaxIdleConn); err != nil {
+		if err = setMaxConn(db, dbconf.MaxOpenConn, dbconf.MaxIdleConn); err != nil {
 			return nil, err
 		}
 
 	case DBDriverSqlite:
-		db, err = storage.NewSqlite3(conf.Address, conf.DB, conf.Options, conf.Debug)
+		db, err = storage.NewSqlite3(dbconf.Address, dbconf.DB, dbconf.Options, dbconf.Debug)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +47,7 @@ func NewDao(conf *config.DB) (*dao, error) {
 	if err = db.AutoMigrate(&Cert{}, &CA{}); err != nil {
 		return nil, err
 	}
-	return &dao{db: db, conf: conf}, nil
+	return &dao{db: db, conf: dbconf}, nil
 }
 
 func setMaxConn(db *gorm.DB, maxOpenConn int64, maxIdleConn int64) error {
