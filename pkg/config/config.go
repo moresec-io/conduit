@@ -22,7 +22,7 @@ type Listen struct {
 }
 
 type Dial struct {
-	Network string   `yaml:"network" json:"network"`
-	Addrs   []string `yaml:"addrs" json:"addrs"`
-	TLS     *TLS     `yaml:"tls,omitempty" json:"tls"`
+	Network   string   `yaml:"network" json:"network"`
+	Addresses []string `yaml:"addresses" json:"addresses"`
+	TLS       *TLS     `yaml:"tls,omitempty" json:"tls"`
 }

@@ -40,28 +40,32 @@ type Manager struct {
 	Dial   config.Dial `yaml:"dial"`
 }
 
-type Server struct {
-	Enable bool          `yaml:"enable"`
-	Listen config.Listen `yaml:"listen"`
+type ForwardElem struct {
+	Dst       string `yaml:"dst"` // :9092 or 192.168.0.2:9092
+	PeerIndex int    `yaml:"peer_index"`
+	DstTo     string `yaml:"dst_to"`
 }
 
-type Policy struct {
-	Dst   string       `yaml:"dst"`              // :9092
-	Proxy *config.Dial `yaml:"proxy,omitempty"`  // 代理
-	DstTo string       `yaml:"dst_to,omitempty"` // 127.0.0.1:9092
+type Peer struct {
+	Index     int        `yaml:"index"`
+	Network   string     `yaml:"network"`
+	Addresses []string   `yaml:"addresses"`
+	TLS       config.TLS `yaml:"tls"`
 }
 
 // TLS > Default TLS
 type Client struct {
-	Enable       bool     `yaml:"enable"`
-	Listen       string   `yaml:"listen"` // for tcp transparent
-	CheckTime    int      `yaml:"check_time"`
-	Policies     []Policy `yaml:"policies"`
-	DefaultProxy struct {
-		Network    string      `yaml:"network"`
-		ServerPort int         `yaml:"server_port"` // server addr is combined by dst:server_port
-		TLS        *config.TLS `yaml:"tls,omitempty"`
-	} `yaml:"default_proxy"`
+	Enable       bool          `yaml:"enable"`
+	Network      string        `yaml:"network"` // tcp, udp or tcp,udp
+	Listen       string        `yaml:"listen"`  // for tcp transparent
+	CheckTime    int           `yaml:"check_time,omitemtpy"`
+	ForwardTable []ForwardElem `yaml:"forward_table"`
+	Peers        []Peer        `yaml:"peers"`
+}
+
+type Server struct {
+	Enable        bool `yaml:"enable"`
+	config.Listen `yaml:"listen"`
 }
 
 type Config struct {

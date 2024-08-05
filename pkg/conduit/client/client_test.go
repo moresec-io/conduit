@@ -15,10 +15,10 @@ import (
 
 func TestSetTables(t *testing.T) {
 	conf := &config.Config{}
-	conf.Client.Policies = make([]config.Policy, 1)
-	conf.Client.Policies[0].Dst = ":9092"
+	conf.Client.ForwardTable = make([]config.ForwardElem, 1)
+	conf.Client.ForwardTable[0].Dst = ":9092"
 	conf.Client.Listen = "127.0.0.1:5052" // client
-	t.Log(conf.Client.Policies[0].Dst)
+	t.Log(conf.Client.ForwardTable[0].Dst)
 
 	client, err := NewClient(conf)
 	if err != nil {
@@ -30,10 +30,10 @@ func TestSetTables(t *testing.T) {
 
 func TestUnSetTables(t *testing.T) {
 	conf := &config.Config{}
-	conf.Client.Policies = make([]config.Policy, 1)
-	conf.Client.Policies[0].Dst = ":9092"
+	conf.Client.ForwardTable = make([]config.ForwardElem, 1)
+	conf.Client.ForwardTable[0].Dst = ":9092"
 	conf.Client.Listen = "127.0.0.1:5052" // client
-	t.Log(conf.Client.Policies[0].Dst)
+	t.Log(conf.Client.ForwardTable[0].Dst)
 
 	client, err := NewClient(conf)
 	if err != nil {

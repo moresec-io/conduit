@@ -16,6 +16,10 @@ var (
 	ErrChainNoMatch         = errors.New("iptables: No chain/target/match by that name.")
 	ErrBadRule              = errors.New("iptables: Bad rule (does a matching rule exist in that chain?).")
 	ErrUnsupportedLocalMode = errors.New("unsupported local mode")
+
+	ErrDuplicatedPeerIndexConfigured = errors.New("duplicated peer index configured")
+	ErrPeerIndexNotfound             = errors.New("peer index not found")
+	ErrIllegalClientListenAddress    = errors.New("illegal client listen address")
 )
 
 func IsErrChainExists(err string) bool {
