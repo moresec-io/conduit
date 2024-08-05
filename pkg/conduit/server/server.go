@@ -21,7 +21,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	"github.com/moresec-io/conduit/pkg/conduit/sys"
-	"github.com/moresec-io/conduit/pkg/utils"
+	"github.com/moresec-io/conduit/pkg/network"
 )
 
 type Server struct {
@@ -38,7 +38,7 @@ type Server struct {
 func NewServer(conf *config.Config) (*Server, error) {
 	var err error
 	server := &Server{conf: conf}
-	server.listener, err = utils.Listen(&conf.Server.Listen)
+	server.listener, err = network.Listen(&conf.Server.Listen)
 	if err != nil {
 		return nil, err
 	}

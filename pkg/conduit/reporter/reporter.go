@@ -11,8 +11,8 @@ import (
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/conduit/client"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
-	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	gclient "github.com/singchia/geminio/client"
 )
@@ -40,7 +40,7 @@ func NewReporter(conf *config.Config, client *client.Client) (*Reporter, error) 
 	reporter.machineid = id
 
 	dialer := func() (net.Conn, error) {
-		return utils.DialRandom(&config.Conf.Manager.Dial)
+		return network.DialRandom(&config.Conf.Manager.Dial)
 	}
 	opt := gclient.NewEndOptions()
 	opt.SetMeta([]byte(id))
@@ -158,7 +158,7 @@ func (reporter *Reporter) sync() {
 
 func (reporter *Reporter) reportConduit() error {
 	// conduit network
-	networks, err := utils.ListNetworks()
+	networks, err := network.ListNetworks()
 	if err != nil {
 		return err
 	}

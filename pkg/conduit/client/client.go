@@ -21,9 +21,10 @@ import (
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/rproxy"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
+	ierrors "github.com/moresec-io/conduit/pkg/conduit/errors"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
-	"github.com/moresec-io/conduit/pkg/utils"
+	"github.com/moresec-io/conduit/pkg/network"
 )
 
 const (
@@ -36,8 +37,13 @@ const (
 	ConduitIPSetIP     = "CONDUIT_IP"
 )
 
+type peer struct {
+	index      int
+	dialConfig *network.DialConfig
+}
+
 type policy struct {
-	dialConfig *utils.DialConfig
+	dialConfig *network.DialConfig
 	dstTo      string
 }
 
@@ -48,7 +54,10 @@ type Client struct {
 	// listen port
 	port int
 
-	// static policies
+	// static peers
+	peers map[int]*peer
+
+	// forward rules
 	ipportPolicies map[string]*policy
 	portPolicies   map[int]*policy
 	ipPolicies     map[string]*policy
@@ -58,6 +67,7 @@ func NewClient(conf *config.Config) (*Client, error) {
 	client := &Client{
 		conf:           conf,
 		quit:           make(chan struct{}),
+		peers:          make(map[int]*peer),
 		ipportPolicies: make(map[string]*policy),
 		portPolicies:   make(map[int]*policy),
 		ipPolicies:     make(map[string]*policy),
@@ -65,7 +75,7 @@ func NewClient(conf *config.Config) (*Client, error) {
 	// listen
 	ipPort := strings.Split(conf.Client.Listen, ":")
 	if len(ipPort) != 2 {
-		return nil, errors.New("illegal client listen addr")
+		return nil, ierrors.ErrIllegalClientListenAddress
 	}
 	port, err := strconv.Atoi(ipPort[1])
 	if err != nil {
@@ -73,19 +83,30 @@ func NewClient(conf *config.Config) (*Client, error) {
 	}
 	client.port = port
 
-	// default proxy
-	config := &gconfig.Dial{
-		Network: conf.Client.DefaultProxy.Network,
-		TLS:     conf.Client.DefaultProxy.TLS,
-	}
-	defaultdialconfig, err := utils.ConvertConfig(config)
-	if err != nil {
-		return nil, err
+	// peers
+	for _, elem := range conf.Client.Peers {
+		_, ok := client.peers[elem.Index]
+		if ok {
+			return nil, ierrors.ErrDuplicatedPeerIndexConfigured
+		}
+		config := &gconfig.Dial{
+			Network:   elem.Network,
+			Addresses: elem.Addresses,
+			TLS:       &elem.TLS,
+		}
+		dialConfig, err := network.ConvertDialConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		client.peers[elem.Index] = &peer{
+			index:      elem.Index,
+			dialConfig: dialConfig,
+		}
 	}
 
-	// static policy match
-	for _, configpolicy := range conf.Client.Policies {
-		dst, dstTo := configpolicy.Dst, configpolicy.DstTo
+	// static forward match
+	for _, elem := range conf.Client.ForwardTable {
+		dst, dstTo := elem.Dst, elem.DstTo
 		ipport := strings.Split(dst, ":")
 		if len(ipport) != 2 {
 			return nil, errors.New("illegal policy")
@@ -96,20 +117,13 @@ func NewClient(conf *config.Config) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		var po *policy
-		if configpolicy.Proxy == nil {
-			po = &policy{
-				dialConfig: defaultdialconfig,
-			}
-		} else {
-			dialconfig, err := utils.ConvertConfig(configpolicy.Proxy)
-			if err != nil {
-				return nil, err
-			}
-			po = &policy{
-				dialConfig: dialconfig,
-				dstTo:      dstTo,
-			}
+		peer, ok := client.peers[elem.PeerIndex]
+		if !ok {
+			return nil, ierrors.ErrPeerIndexNotfound
+		}
+		po := &policy{
+			dialConfig: peer.dialConfig,
+			dstTo:      dstTo,
 		}
 		if ipstr == "" {
 			client.portPolicies[port] = po
@@ -151,8 +165,8 @@ func (client *Client) Work() error {
 }
 
 func (client *Client) setStaticPolicies() error {
-	for _, policy := range client.conf.Client.Policies {
-		transferIpPort := strings.Split(policy.Dst, ":")
+	for _, elem := range client.conf.Client.ForwardTable {
+		transferIpPort := strings.Split(elem.Dst, ":")
 		ip := transferIpPort[0]
 		port, err := strconv.Atoi(transferIpPort[1])
 		if err != nil {
@@ -246,7 +260,7 @@ func (client *Client) tproxyAcceptConn(conn net.Conn) ([]interface{}, error) {
 		return nil, err
 	}
 	// mark
-	mark, err := utils.GetSocketMark(tcpFile.Fd())
+	mark, err := network.GetSocketMark(tcpFile.Fd())
 	if err != nil {
 		log.Warnf("handle conn, get socket mark err: %s", err)
 	}
@@ -382,7 +396,7 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
-	return utils.DialRandomWithConfig(ctx.dial.dialConfig)
+	return network.DialRandomWithConfig(ctx.dial.dialConfig)
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {

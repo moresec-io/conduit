@@ -10,8 +10,8 @@ import (
 	"github.com/moresec-io/conduit/pkg/manager/apis"
 	"github.com/moresec-io/conduit/pkg/manager/config"
 	"github.com/moresec-io/conduit/pkg/manager/repo"
+	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
-	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	"github.com/singchia/geminio/delegate"
 	"github.com/singchia/geminio/pkg/id"
@@ -36,7 +36,7 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*C
 		idFactory:             id.DefaultIncIDCounter,
 		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
 	}
-	ln, err := utils.Listen(listen)
+	ln, err := network.Listen(listen)
 	if err != nil {
 		log.Errorf("conduit manager listen err: %s", err)
 		return nil, err

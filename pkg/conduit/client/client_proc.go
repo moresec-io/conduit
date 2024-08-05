@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/utils"
 )
 
@@ -54,7 +55,7 @@ func (client *Client) initProc() error {
 }
 
 func (client *Client) iniSysctl() error {
-	infoO, infoE, err := utils.EnableFWMark()
+	infoO, infoE, err := network.EnableFWMark()
 	if err != nil {
 		log.Errorf("client init proc, enable fwmark err: %s, stdout: %s, stderr: %s",
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))

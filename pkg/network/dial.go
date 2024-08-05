@@ -1,4 +1,4 @@
-package utils
+package network
 
 import (
 	"crypto/tls"
@@ -13,7 +13,7 @@ import (
 )
 
 func DialRandom(dial *config.Dial) (net.Conn, error) {
-	idx := rand.Intn(len(dial.Addrs))
+	idx := rand.Intn(len(dial.Addresses))
 	return Dial(dial, idx)
 }
 
@@ -85,10 +85,10 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 	}
 }
 
-func ConvertConfig(dial *config.Dial) (*DialConfig, error) {
+func ConvertDialConfig(dial *config.Dial) (*DialConfig, error) {
 	dialConfig := &DialConfig{
 		Netwotk: dial.Network,
-		Addrs:   dial.Addrs,
+		Addrs:   dial.Addresses,
 	}
 	if dial.TLS != nil && dial.TLS.Enable {
 		// load all certs to dial
@@ -129,10 +129,10 @@ func ConvertConfig(dial *config.Dial) (*DialConfig, error) {
 }
 
 func Dial(dial *config.Dial, index int) (net.Conn, error) {
-	if len(dial.Addrs) == 0 {
+	if len(dial.Addresses) == 0 {
 		return nil, errors.New("illegal addrs")
 	}
-	dialConfig, err := ConvertConfig(dial)
+	dialConfig, err := ConvertDialConfig(dial)
 	if err != nil {
 		return nil, err
 	}
