@@ -43,8 +43,8 @@ type peer struct {
 }
 
 type policy struct {
-	dialConfig *network.DialConfig
-	dstTo      string
+	peerDialConfig *network.DialConfig
+	dstTo          string
 }
 
 type Client struct {
@@ -122,8 +122,8 @@ func NewClient(conf *config.Config) (*Client, error) {
 			return nil, ierrors.ErrPeerIndexNotfound
 		}
 		po := &policy{
-			dialConfig: peer.dialConfig,
-			dstTo:      dstTo,
+			peerDialConfig: peer.dialConfig,
+			dstTo:          dstTo,
 		}
 		if ipstr == "" {
 			client.portPolicies[port] = po
@@ -396,7 +396,7 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
-	return network.DialRandomWithConfig(ctx.dial.dialConfig)
+	return network.DialRandomWithConfig(ctx.dial.peerDialConfig)
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {
