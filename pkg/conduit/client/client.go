@@ -23,6 +23,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	ierrors "github.com/moresec-io/conduit/pkg/conduit/errors"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
+	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
 	"github.com/moresec-io/conduit/pkg/network"
 )
@@ -57,17 +58,20 @@ type Client struct {
 	// static peers
 	peers map[int]*peer
 
+	repo repo.Repo
+
 	// forward rules
 	ipportPolicies map[string]*policy
 	portPolicies   map[int]*policy
 	ipPolicies     map[string]*policy
 }
 
-func NewClient(conf *config.Config) (*Client, error) {
+func NewClient(conf *config.Config, repo repo.Repo) (*Client, error) {
 	client := &Client{
 		conf:           conf,
 		quit:           make(chan struct{}),
 		peers:          make(map[int]*peer),
+		repo:           repo,
 		ipportPolicies: make(map[string]*policy),
 		portPolicies:   make(map[int]*policy),
 		ipPolicies:     make(map[string]*policy),
@@ -142,7 +146,7 @@ func (client *Client) Work() error {
 	}
 	// clear legacies
 	client.finiTables(log.LevelDebug, "flush tables before init")
-	client.finiIPSet(log.LevelDebug, "destroy ipset before init")
+	client.repo.FiniIPSet(log.LevelDebug, "destroy ipset before init")
 
 	// set
 	err = client.setIPSet()
@@ -173,12 +177,12 @@ func (client *Client) setStaticPolicies() error {
 			return err
 		}
 		if ip == "" {
-			err = client.AddIPSetPort(uint16(port))
+			err = client.repo.AddIPSetPort(uint16(port))
 			if err != nil {
 				return err
 			}
 		} else {
-			err = client.AddIPSetIPPort(net.ParseIP(ip), uint16(port))
+			err = client.repo.AddIPSetIPPort(net.ParseIP(ip), uint16(port))
 			if err != nil {
 				return err
 			}
@@ -212,14 +216,14 @@ func (client *Client) Close() {
 	client.rp.Close()
 	close(client.quit)
 	client.finiTables(log.LevelWarn, "client fini tables")
-	client.finiIPSet(log.LevelWarn, "client fini ipset")
+	client.repo.FiniIPSet(log.LevelWarn, "client fini ipset")
 }
 
 type ctx struct {
 	// connection info
-	srcIp   string // source ip
+	srcIP   string // source ip
 	srcPort int    // source port
-	dstIp   string // real dst ip
+	dstIP   string // real dst ip
 	dstPort int    // real dst port
 	dst     string // real dst in string
 	mark    uint32
@@ -334,9 +338,9 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 	}
 
 	ctx := &ctx{
-		srcIp:   srcIp,
+		srcIP:   srcIp,
 		srcPort: srcPort,
-		dstIp:   dstIp,
+		dstIP:   dstIp,
 		dstPort: dstPort,
 		dst:     dst.String(),
 		dstTo:   dstIp + ":" + strconv.Itoa(dstPort),
@@ -348,7 +352,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 	switch mark {
 	case uint32(config.MarkIpsetIP):
 		// manager policy
-		policy, ok = client.ipPolicies[ctx.dstIp]
+		policy, ok = client.ipPolicies[ctx.dstIP]
 		if !ok {
 			return nil, errors.New("policy not found")
 		}
@@ -367,7 +371,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 		ctx.dial = policy
 	default:
 		// failed to get mask, maybe fwmark_accept not enabled, we must iterate policies
-		policy, ok = client.ipPolicies[ctx.dstIp]
+		policy, ok = client.ipPolicies[ctx.dstIP]
 		if ok {
 			ctx.dial = policy
 			break
@@ -406,9 +410,9 @@ func (client *Client) tproxyPostDial(custom interface{}) error {
 func (client *Client) tproxyPreWrite(writer io.Writer, custom interface{}) error {
 	ctx := custom.(*ctx)
 	proto := &proto.ConduitProto{
-		SrcIp:   ctx.srcIp,
+		SrcIP:   ctx.srcIP,
 		SrcPort: ctx.srcPort,
-		DstIp:   ctx.dstIp,
+		DstIP:   ctx.dstIP,
 		DstPort: ctx.dstPort,
 		DstTo:   ctx.dstTo,
 	}

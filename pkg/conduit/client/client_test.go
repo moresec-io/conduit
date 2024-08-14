@@ -11,6 +11,7 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/repo"
 )
 
 func TestSetTables(t *testing.T) {
@@ -20,7 +21,7 @@ func TestSetTables(t *testing.T) {
 	conf.Client.Listen = "127.0.0.1:5052" // client
 	t.Log(conf.Client.ForwardTable[0].Dst)
 
-	client, err := NewClient(conf)
+	client, err := NewClient(conf, repo.NewRepo())
 	if err != nil {
 		t.Error(err)
 		return
@@ -35,7 +36,7 @@ func TestUnSetTables(t *testing.T) {
 	conf.Client.Listen = "127.0.0.1:5052" // client
 	t.Log(conf.Client.ForwardTable[0].Dst)
 
-	client, err := NewClient(conf)
+	client, err := NewClient(conf, repo.NewRepo())
 	if err != nil {
 		t.Error(err)
 		return

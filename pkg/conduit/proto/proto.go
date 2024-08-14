@@ -7,9 +7,9 @@
 package proto
 
 type ConduitProto struct {
-	SrcIp   string
+	SrcIP   string
 	SrcPort int
-	DstIp   string
+	DstIP   string
 	DstPort int
 	DstTo   string
 }
