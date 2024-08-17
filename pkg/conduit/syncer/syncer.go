@@ -159,6 +159,7 @@ func (syncer *Syncer) sync() {
 	}
 }
 
+// get cert back
 func (syncer *Syncer) reportConduit() error {
 	// conduit network
 	networks, err := network.ListNetworks()
