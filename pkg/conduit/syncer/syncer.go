@@ -1,4 +1,4 @@
-package reporter
+package syncer
 
 import (
 	"context"
@@ -9,35 +9,36 @@ import (
 
 	"github.com/denisbrodbeck/machineid"
 	"github.com/jumboframes/armorigo/log"
-	"github.com/moresec-io/conduit/pkg/conduit/client"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
 	"github.com/singchia/geminio"
 	gclient "github.com/singchia/geminio/client"
 )
 
-type Reporter struct {
+type Syncer struct {
 	machineid string
 	end       geminio.End
 
-	client *client.Client
+	repo repo.Repo
 
 	conf  *config.Config
 	mtx   sync.RWMutex
 	cache []proto.Conduit // key: machineid, value: ipnets
 }
 
-func NewReporter(conf *config.Config, client *client.Client) (*Reporter, error) {
-	reporter := &Reporter{
+func NewSyncer(conf *config.Config, repo repo.Repo) (*Syncer, error) {
+	syncer := &Syncer{
 		cache: []proto.Conduit{},
+		repo:  repo,
 	}
 
 	id, err := machineid.ID()
 	if err != nil {
 		return nil, err
 	}
-	reporter.machineid = id
+	syncer.machineid = id
 
 	dialer := func() (net.Conn, error) {
 		return network.DialRandom(&config.Conf.Manager.Dial)
@@ -48,22 +49,23 @@ func NewReporter(conf *config.Config, client *client.Client) (*Reporter, error) 
 	if err != nil {
 		return nil, err
 	}
-	reporter.end = end
+	syncer.end = end
 
-	err = end.Register(context.TODO(), proto.RPCOnlineConduit, reporter.onlineConduit)
+	err = end.Register(context.TODO(), proto.RPCOnlineConduit, syncer.onlineConduit)
 	if err != nil {
 		return nil, err
 	}
-	err = end.Register(context.TODO(), proto.RPCOfflineConduit, reporter.offlineConduit)
+	err = end.Register(context.TODO(), proto.RPCOfflineConduit, syncer.offlineConduit)
 	if err != nil {
 		return nil, err
 	}
 
-	go reporter.sync()
-	return reporter, nil
+	go syncer.sync()
+	return syncer, nil
 }
 
-func (reporter *Reporter) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+// client only
+func (syncer *Syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.OnlineConduitRequest{}
 	err := json.Unmarshal(data, request)
@@ -71,26 +73,26 @@ func (reporter *Reporter) onlineConduit(_ context.Context, req geminio.Request, 
 		rsp.SetError(err)
 		return
 	}
-	reporter.mtx.Lock()
-	defer reporter.mtx.Unlock()
+	syncer.mtx.Lock()
+	defer syncer.mtx.Unlock()
 
 	found := false
-	for _, oldone := range reporter.cache {
+	for _, oldone := range syncer.cache {
 		if oldone.MachineID == request.MachineID {
 			// typically we won't be here
 			found = true
 			removes, adds := compareNets(oldone.IPNets, request.IPNets)
 			for _, remove := range removes {
-				err = reporter.client.DelIPSetIP(remove.IP)
+				err = syncer.repo.DelIPSetIP(remove.IP)
 				if err != nil {
-					log.Errorf("reporter online conduit, del ipset err: %s", err)
+					log.Errorf("syncer online conduit, del ipset err: %s", err)
 					continue
 				}
 			}
 			for _, add := range adds {
-				err = reporter.client.AddIPSetIP(add.IP)
+				err = syncer.repo.AddIPSetIP(add.IP)
 				if err != nil {
-					log.Errorf("reporter online conduit, add ipset err: %s", err)
+					log.Errorf("syncer online conduit, add ipset err: %s", err)
 					continue
 				}
 			}
@@ -98,14 +100,14 @@ func (reporter *Reporter) onlineConduit(_ context.Context, req geminio.Request, 
 		}
 	}
 	if !found {
-		reporter.cache = append(reporter.cache, proto.Conduit{
+		syncer.cache = append(syncer.cache, proto.Conduit{
 			MachineID: request.MachineID,
 			IPNets:    request.IPNets,
 		})
 		for _, newone := range request.IPNets {
-			err = reporter.client.AddIPSetIP(newone.IP)
+			err = syncer.repo.AddIPSetIP(newone.IP)
 			if err != nil {
-				log.Errorf("reporter online conduit, add ipset err: %s", err)
+				log.Errorf("syncer online conduit, add ipset err: %s", err)
 				continue
 			}
 		}
@@ -113,7 +115,8 @@ func (reporter *Reporter) onlineConduit(_ context.Context, req geminio.Request, 
 	return
 }
 
-func (reporter *Reporter) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+// client only
+func (syncer *Syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.OfflineConduitRequest{}
 	err := json.Unmarshal(data, request)
@@ -121,59 +124,60 @@ func (reporter *Reporter) offlineConduit(_ context.Context, req geminio.Request,
 		rsp.SetError(err)
 		return
 	}
-	reporter.mtx.Lock()
-	defer reporter.mtx.Unlock()
+	syncer.mtx.Lock()
+	defer syncer.mtx.Unlock()
 
-	for i, oldone := range reporter.cache {
+	for i, oldone := range syncer.cache {
 		if oldone.MachineID == request.MachineID {
 			for _, remove := range oldone.IPNets {
-				err = reporter.client.DelIPSetIP(remove.IP)
+				err = syncer.repo.DelIPSetIP(remove.IP)
 				if err != nil {
-					log.Errorf("reporter offline conduit, del ipset err: %s", err)
+					log.Errorf("syncer offline conduit, del ipset err: %s", err)
 					continue
 				}
 			}
-			reporter.cache = append(reporter.cache[:i], reporter.cache[i+1:]...)
+			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
 			break
 		}
 	}
 }
 
-func (reporter *Reporter) sync() {
+func (syncer *Syncer) sync() {
 	ticker := time.NewTicker(10 * time.Second)
 	for {
 		<-ticker.C
-		err := reporter.reportConduit()
+		err := syncer.reportConduit()
 		if err != nil {
-			log.Errorf("reporter sync, report agent err: %s", err)
+			log.Errorf("syncer sync, report agent err: %s", err)
 			continue
 		}
-		err = reporter.pullCluster()
+		err = syncer.pullCluster()
 		if err != nil {
-			log.Errorf("reporter sync, pull cluster err: %s", err)
+			log.Errorf("syncer sync, pull cluster err: %s", err)
 			continue
 		}
 	}
 }
 
-func (reporter *Reporter) reportConduit() error {
+// get cert back
+func (syncer *Syncer) reportConduit() error {
 	// conduit network
 	networks, err := network.ListNetworks()
 	if err != nil {
 		return err
 	}
 	request := &proto.ReportConduitRequest{
-		MachineID: reporter.machineid,
-		Network:   reporter.conf.Server.Listen.Network,
-		Listen:    reporter.conf.Server.Listen.Addr,
+		MachineID: syncer.machineid,
+		Network:   syncer.conf.Server.Listen.Network,
+		Listen:    syncer.conf.Server.Listen.Addr,
 		IPNets:    networks,
 	}
 	data, err := json.Marshal(request)
 	if err != nil {
 		return err
 	}
-	req := reporter.end.NewRequest(data)
-	rsp, err := reporter.end.Call(context.TODO(), proto.RPCReportConduit, req)
+	req := syncer.end.NewRequest(data)
+	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportConduit, req)
 	if err != nil {
 		return err
 	}
@@ -183,16 +187,16 @@ func (reporter *Reporter) reportConduit() error {
 	return nil
 }
 
-func (reporter *Reporter) pullCluster() error {
+func (syncer *Syncer) pullCluster() error {
 	request := &proto.PullClusterRequest{
-		MachineID: reporter.machineid,
+		MachineID: syncer.machineid,
 	}
 	data, err := json.Marshal(request)
 	if err != nil {
 		return err
 	}
-	req := reporter.end.NewRequest(data)
-	rsp, err := reporter.end.Call(context.TODO(), proto.RPCPullCluster, req)
+	req := syncer.end.NewRequest(data)
+	rsp, err := syncer.end.Call(context.TODO(), proto.RPCPullCluster, req)
 	if err != nil {
 		return err
 	}
@@ -202,22 +206,22 @@ func (reporter *Reporter) pullCluster() error {
 	if err != nil {
 		return err
 	}
-	reporter.mtx.Lock()
-	defer reporter.mtx.Unlock()
+	syncer.mtx.Lock()
+	defer syncer.mtx.Unlock()
 
-	removes, adds := compareConduits(reporter.cache, response.Conduits)
-	reporter.cache = response.Conduits
+	removes, adds := compareConduits(syncer.cache, response.Conduits)
+	syncer.cache = response.Conduits
 	for _, remove := range removes {
-		err = reporter.client.DelIPSetIP(remove.IP)
+		err = syncer.repo.DelIPSetIP(remove.IP)
 		if err != nil {
-			log.Errorf("reporter pull cluster, del ipset err: %s", err)
+			log.Errorf("syncer pull cluster, del ipset err: %s", err)
 			continue
 		}
 	}
 	for _, add := range adds {
-		err = reporter.client.AddIPSetIP(add.IP)
+		err = syncer.repo.AddIPSetIP(add.IP)
 		if err != nil {
-			log.Errorf("reporter pull cluster, add ipset err: %s", err)
+			log.Errorf("syncer pull cluster, add ipset err: %s", err)
 			continue
 		}
 	}

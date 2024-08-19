@@ -10,6 +10,7 @@ import (
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/conduit/client"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
+	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/conduit/server"
 )
 
@@ -37,8 +38,10 @@ func NewConduit() (*Conduit, error) {
 
 	conf := config.Conf
 
+	repo := repo.NewRepo()
+
 	if conf.Client.Enable {
-		cli, err = client.NewClient(conf)
+		cli, err = client.NewClient(config.Conf, repo)
 		if err != nil {
 			log.Errorf("Conduit new client err: %s", err)
 			return nil, err
