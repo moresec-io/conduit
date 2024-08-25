@@ -20,3 +20,14 @@ type OnlineConduitRequest ReportConduitRequest
 type OfflineConduitRequest struct {
 	MachineID string `json:"machine_id"`
 }
+
+type TLS struct {
+	Enable bool `json:"enable"`
+	MTLS   bool `json:"mtls"`
+}
+
+type ReportServerRequest struct {
+	MachineID string `json:"machine_id"`
+	Network   string `json:"network"`
+	Listen    string `json:"listen"`
+}

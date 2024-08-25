@@ -17,8 +17,8 @@ type TLS struct {
 type Listen struct {
 	Network     string `yaml:"network" json:"network"`
 	Addr        string `yaml:"addr" json:"addr"`
-	TLSStrategy string `yaml:"tls_strategy"` // "local" or "manager"
-	TLS         *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"`
+	TLSStrategy string `yaml:"tls_strategy"`                       // "local" or "manager"
+	TLS         *TLS   `yaml:"tls,omitempty" json:"tls,omitempty"` // only when tls_strategy is local
 }
 
 type Dial struct {

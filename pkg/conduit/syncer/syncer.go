@@ -17,18 +17,24 @@ import (
 	gclient "github.com/singchia/geminio/client"
 )
 
+const (
+	SyncModeUp = 1 << iota
+	SyncModeDown
+)
+
 type Syncer struct {
 	machineid string
 	end       geminio.End
 
 	repo repo.Repo
 
-	conf  *config.Config
-	mtx   sync.RWMutex
-	cache []proto.Conduit // key: machineid, value: ipnets
+	conf     *config.Config
+	mtx      sync.RWMutex
+	cache    []proto.Conduit // key: machineid, value: ipnets
+	syncMode int
 }
 
-func NewSyncer(conf *config.Config, repo repo.Repo) (*Syncer, error) {
+func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (*Syncer, error) {
 	syncer := &Syncer{
 		cache: []proto.Conduit{},
 		repo:  repo,
@@ -40,6 +46,7 @@ func NewSyncer(conf *config.Config, repo repo.Repo) (*Syncer, error) {
 	}
 	syncer.machineid = id
 
+	// connect to manager
 	dialer := func() (net.Conn, error) {
 		return network.DialRandom(&config.Conf.Manager.Dial)
 	}
@@ -51,16 +58,19 @@ func NewSyncer(conf *config.Config, repo repo.Repo) (*Syncer, error) {
 	}
 	syncer.end = end
 
-	err = end.Register(context.TODO(), proto.RPCOnlineConduit, syncer.onlineConduit)
-	if err != nil {
-		return nil, err
-	}
-	err = end.Register(context.TODO(), proto.RPCOfflineConduit, syncer.offlineConduit)
-	if err != nil {
-		return nil, err
+	// only downlink cares about other conduits online/offline
+	if syncMode&SyncModeDown != 0 {
+		err = end.Register(context.TODO(), proto.RPCOnlineConduit, syncer.onlineConduit)
+		if err != nil {
+			return nil, err
+		}
+		err = end.Register(context.TODO(), proto.RPCOfflineConduit, syncer.offlineConduit)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	go syncer.sync()
+	go syncer.sync(syncMode)
 	return syncer, nil
 }
 
@@ -142,26 +152,30 @@ func (syncer *Syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 	}
 }
 
-func (syncer *Syncer) sync() {
+func (syncer *Syncer) sync(syncMode int) {
 	ticker := time.NewTicker(10 * time.Second)
 	for {
 		<-ticker.C
-		err := syncer.reportConduit()
-		if err != nil {
-			log.Errorf("syncer sync, report agent err: %s", err)
-			continue
+		if syncMode&SyncModeUp != 0 {
+			err := syncer.reportConduit()
+			if err != nil {
+				log.Errorf("syncer sync, report agent err: %s", err)
+				continue
+			}
 		}
-		err = syncer.pullCluster()
-		if err != nil {
-			log.Errorf("syncer sync, pull cluster err: %s", err)
-			continue
+		if syncMode&SyncModeDown != 0 {
+			err := syncer.pullCluster()
+			if err != nil {
+				log.Errorf("syncer sync, pull cluster err: %s", err)
+				continue
+			}
 		}
 	}
 }
 
-// get cert back
 func (syncer *Syncer) reportConduit() error {
 	// conduit network
+	// currently we ignore bridges, and all local networks should be accessable by conduit
 	networks, err := network.ListNetworks()
 	if err != nil {
 		return err
