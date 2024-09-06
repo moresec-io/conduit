@@ -22,12 +22,19 @@ type OfflineConduitRequest struct {
 }
 
 type TLS struct {
-	Enable bool `json:"enable"`
-	MTLS   bool `json:"mtls"`
+	Enable bool   `json:"enable"`
+	MTLS   bool   `json:"mtls"`
+	CA     []byte `json:"ca"`
+	Cert   []byte `json:"cert"`
+	Key    []byte `json:"key"`
 }
 
 type ReportServerRequest struct {
 	MachineID string `json:"machine_id"`
 	Network   string `json:"network"`
 	Listen    string `json:"listen"`
+}
+
+type ReportServerResponse struct {
+	TLS *TLS
 }

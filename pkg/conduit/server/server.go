@@ -8,8 +8,6 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
 	"io"
@@ -27,9 +25,6 @@ import (
 type Server struct {
 	conf *config.Config
 	rp   *rproxy.RProxy
-	// ca & certs
-	caPool *x509.CertPool
-	certs  []tls.Certificate
 
 	// listener
 	listener net.Listener
