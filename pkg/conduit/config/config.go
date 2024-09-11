@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/denisbrodbeck/machineid"
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
 
@@ -69,6 +70,8 @@ type Server struct {
 }
 
 type Config struct {
+	MachineID string `yaml:"-"`
+
 	Manager Manager `yaml:"manager"`
 
 	Server Server `yaml:"server"`
@@ -97,6 +100,14 @@ func Init() error {
 	}
 
 	err = initLog()
+	if err != nil {
+		return err
+	}
+	id, err := machineid.ID()
+	if err != nil {
+		return err
+	}
+	Conf.MachineID = id
 	return err
 }
 

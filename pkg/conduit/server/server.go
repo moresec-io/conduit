@@ -32,6 +32,9 @@ type Server struct {
 
 func NewServer(conf *config.Config) (*Server, error) {
 	var err error
+	if conf.Manager.Enable {
+
+	}
 	server := &Server{conf: conf}
 	server.listener, err = network.Listen(&conf.Server.Listen)
 	if err != nil {

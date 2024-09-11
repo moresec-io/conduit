@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/denisbrodbeck/machineid"
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
@@ -40,18 +39,12 @@ func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (*Syncer, erro
 		repo:  repo,
 	}
 
-	id, err := machineid.ID()
-	if err != nil {
-		return nil, err
-	}
-	syncer.machineid = id
-
 	// connect to manager
 	dialer := func() (net.Conn, error) {
 		return network.DialRandom(&config.Conf.Manager.Dial)
 	}
 	opt := gclient.NewEndOptions()
-	opt.SetMeta([]byte(id))
+	opt.SetMeta([]byte(conf.MachineID))
 	end, err := gclient.NewEndWithDialer(dialer, opt)
 	if err != nil {
 		return nil, err
@@ -72,6 +65,15 @@ func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (*Syncer, erro
 
 	go syncer.sync(syncMode)
 	return syncer, nil
+}
+
+func (syncer *Syncer) ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error) {
+	data, err := json.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
+	// TODO
+	return nil, nil
 }
 
 // client only
@@ -182,8 +184,6 @@ func (syncer *Syncer) reportConduit() error {
 	}
 	request := &proto.ReportConduitRequest{
 		MachineID: syncer.machineid,
-		Network:   syncer.conf.Server.Listen.Network,
-		Listen:    syncer.conf.Server.Listen.Addr,
 		IPNets:    networks,
 	}
 	data, err := json.Marshal(request)
