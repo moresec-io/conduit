@@ -10,8 +10,6 @@ const (
 
 type ReportConduitRequest struct {
 	MachineID string      `json:"machine_id"`
-	Network   string      `json:"network"`
-	Listen    string      `json:"listen"`
 	IPNets    []net.IPNet `json:"ipnets"`
 }
 
@@ -32,7 +30,7 @@ type TLS struct {
 type ReportServerRequest struct {
 	MachineID string `json:"machine_id"`
 	Network   string `json:"network"`
-	Listen    string `json:"listen"`
+	Addr      string `json:"addr"`
 }
 
 type ReportServerResponse struct {
