@@ -21,7 +21,11 @@ const (
 	SyncModeDown
 )
 
-type Syncer struct {
+type Syncer interface {
+	ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error)
+}
+
+type syncer struct {
 	machineid string
 	end       geminio.End
 
@@ -33,8 +37,8 @@ type Syncer struct {
 	syncMode int
 }
 
-func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (*Syncer, error) {
-	syncer := &Syncer{
+func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
+	syncer := &syncer{
 		cache: []proto.Conduit{},
 		repo:  repo,
 	}
@@ -67,17 +71,26 @@ func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (*Syncer, erro
 	return syncer, nil
 }
 
-func (syncer *Syncer) ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error) {
+func (syncer *syncer) ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	// TODO
-	return nil, nil
+	req := syncer.end.NewRequest(data)
+	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportServer, req)
+	if err != nil {
+		return nil, err
+	}
+	if rsp.Error() != nil {
+		return nil, err
+	}
+	data = rsp.Data()
+	response := &proto.ReportServerResponse{}
+	return response, err
 }
 
 // client only
-func (syncer *Syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.OnlineConduitRequest{}
 	err := json.Unmarshal(data, request)
@@ -128,7 +141,7 @@ func (syncer *Syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 }
 
 // client only
-func (syncer *Syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.OfflineConduitRequest{}
 	err := json.Unmarshal(data, request)
@@ -154,7 +167,7 @@ func (syncer *Syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 	}
 }
 
-func (syncer *Syncer) sync(syncMode int) {
+func (syncer *syncer) sync(syncMode int) {
 	ticker := time.NewTicker(10 * time.Second)
 	for {
 		<-ticker.C
@@ -175,7 +188,7 @@ func (syncer *Syncer) sync(syncMode int) {
 	}
 }
 
-func (syncer *Syncer) reportConduit() error {
+func (syncer *syncer) reportConduit() error {
 	// conduit network
 	// currently we ignore bridges, and all local networks should be accessable by conduit
 	networks, err := network.ListNetworks()
@@ -201,7 +214,7 @@ func (syncer *Syncer) reportConduit() error {
 	return nil
 }
 
-func (syncer *Syncer) pullCluster() error {
+func (syncer *syncer) pullCluster() error {
 	request := &proto.PullClusterRequest{
 		MachineID: syncer.machineid,
 	}
@@ -212,6 +225,9 @@ func (syncer *Syncer) pullCluster() error {
 	req := syncer.end.NewRequest(data)
 	rsp, err := syncer.end.Call(context.TODO(), proto.RPCPullCluster, req)
 	if err != nil {
+		return err
+	}
+	if rsp.Error() != nil {
 		return err
 	}
 	data = rsp.Data()

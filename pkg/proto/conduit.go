@@ -3,6 +3,7 @@ package proto
 import "net"
 
 const (
+	RPCReportServer   = "report_server"
 	RPCReportConduit  = "report_conduit"
 	RPCOnlineConduit  = "online_conduit"
 	RPCOfflineConduit = "offline_conduit"
