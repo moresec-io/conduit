@@ -18,24 +18,44 @@ import (
 	"github.com/jumboframes/armorigo/rproxy"
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
+	"github.com/moresec-io/conduit/pkg/conduit/syncer"
 	"github.com/moresec-io/conduit/pkg/conduit/sys"
 	"github.com/moresec-io/conduit/pkg/network"
+	gproto "github.com/moresec-io/conduit/pkg/proto"
 )
 
 type Server struct {
-	conf *config.Config
-	rp   *rproxy.RProxy
+	conf   *config.Config
+	rp     *rproxy.RProxy
+	syncer syncer.Syncer
 
 	// listener
 	listener net.Listener
 }
 
-func NewServer(conf *config.Config) (*Server, error) {
-	var err error
+func NewServer(conf *config.Config, syncer syncer.Syncer) (*Server, error) {
+	var (
+		err error
+		tls *gproto.TLS
+	)
 	if conf.Manager.Enable {
+		response, err := syncer.ReportServer(&gproto.ReportServerRequest{
+			MachineID: conf.MachineID,
+			Network:   conf.Server.Network,
+			Addr:      conf.Server.Addr,
+		})
+		if err != nil {
+			return nil, err
+		}
+		tls = response.TLS
+	}
+	server := &Server{
+		conf:   conf,
+		syncer: syncer,
+	}
+	if tls != nil {
 
 	}
-	server := &Server{conf: conf}
 	server.listener, err = network.Listen(&conf.Server.Listen)
 	if err != nil {
 		return nil, err
