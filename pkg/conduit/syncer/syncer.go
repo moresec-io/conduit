@@ -22,7 +22,7 @@ const (
 )
 
 type Syncer interface {
-	ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error)
+	ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error)
 }
 
 type syncer struct {
