@@ -12,6 +12,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/config"
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/conduit/server"
+	"github.com/moresec-io/conduit/pkg/conduit/syncer"
 )
 
 type Conduit struct {
@@ -22,9 +23,13 @@ type Conduit struct {
 
 func NewConduit() (*Conduit, error) {
 	var (
-		cli *client.Client
-		srv *server.Server
-		err error
+		cli       *client.Client
+		clienable bool
+		srv       *server.Server
+		srvenable bool
+		syn       syncer.Syncer
+		syncMode  int
+		err       error
 	)
 	err = config.Init()
 	if err != nil {
@@ -36,26 +41,40 @@ func NewConduit() (*Conduit, error) {
                 CONDUIT STARTS
 ==================================================`)
 
-	conf := config.Conf
+	if config.Conf.Client.Enable {
+		clienable = true
+		syncMode |= syncer.SyncModeDown
+	}
+	if config.Conf.Server.Enable {
+		srvenable = true
+		syncMode |= syncer.SyncModeUp
+	}
 
 	repo := repo.NewRepo()
-
-	if conf.Client.Enable {
-		cli, err = client.NewClient(config.Conf, repo)
+	if config.Conf.Manager.Enable {
+		syn, err = syncer.NewSyncer(config.Conf, repo, syncMode)
 		if err != nil {
-			log.Errorf("Conduit new client err: %s", err)
+			log.Errorf("conduit new syncer err: %s", err)
 			return nil, err
 		}
 	}
-	if conf.Server.Enable {
-		srv, err = server.NewServer(conf)
+
+	if clienable {
+		cli, err = client.NewClient(config.Conf, repo)
 		if err != nil {
-			log.Errorf("Conduit new server err: %s", err)
+			log.Errorf("conduit new client err: %s", err)
+			return nil, err
+		}
+	}
+	if srvenable {
+		srv, err = server.NewServer(config.Conf, syn)
+		if err != nil {
+			log.Errorf("conduit new server err: %s", err)
 			return nil, err
 		}
 	}
 	return &Conduit{
-		conf:   conf,
+		conf:   config.Conf,
 		client: cli,
 		server: srv,
 	}, nil

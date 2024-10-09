@@ -25,6 +25,10 @@ type Syncer interface {
 	ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error)
 }
 
+func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (Syncer, error) {
+	return newsyncer(conf, repo, syncMode)
+}
+
 type syncer struct {
 	machineid string
 	end       geminio.End
@@ -71,7 +75,7 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 	return syncer, nil
 }
 
-func (syncer *syncer) ReportServer(request *proto.ReportServerResponse) (*proto.ReportServerResponse, error) {
+func (syncer *syncer) ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
