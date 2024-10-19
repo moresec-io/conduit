@@ -34,6 +34,10 @@ type ReportServerRequest struct {
 	Addr      string `json:"addr"`
 }
 
+type ReportClientRequest struct {
+	MachineID string `json:"machine_id"`
+}
+
 type ReportServerResponse struct {
 	TLS *TLS
 }

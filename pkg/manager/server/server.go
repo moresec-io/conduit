@@ -5,10 +5,13 @@ import (
 	"github.com/moresec-io/conduit/pkg/manager/config"
 	"github.com/moresec-io/conduit/pkg/manager/repo"
 	"github.com/moresec-io/conduit/pkg/network"
+	"github.com/singchia/go-timer/v2"
 	"github.com/soheilhy/cmux"
 )
 
-type Server struct{}
+type Server struct {
+	tmr timer.Timer
+}
 
 func NewServer(conf *config.Config, repo repo.Repo) (*Server, error) {
 	listen := &conf.ControlPlane.Listen
