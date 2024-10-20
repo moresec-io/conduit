@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/manager/apis"
@@ -19,12 +21,20 @@ import (
 	"github.com/singchia/go-timer/v2"
 )
 
+type endNtime struct {
+	end        geminio.End
+	createTime time.Time
+}
+
 type ConduitManager struct {
 	*delegate.UnimplementedDelegate
 	ln        net.Listener
 	repo      repo.Repo
 	tmr       timer.Timer
 	idFactory id.IDFactory
+	// inflight ends
+	mtx  sync.RWMutex
+	ends map[string]*endNtime
 }
 
 func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*ConduitManager, error) {
@@ -74,11 +84,18 @@ func (cm *ConduitManager) handleConn(conn net.Conn) error {
 		log.Errorf("conduit manager handle conn, register err: %s", err)
 		return err
 	}
+	log.Infof("conduit manager handle conn: %s", conn.RemoteAddr().String())
+	cm.mtx.Lock()
+	cm.ends[end.RemoteAddr().String()] = &endNtime{
+		end:        end,
+		createTime: time.Now(),
+	}
+	cm.mtx.Unlock()
 	return nil
 }
 
 func (cm *ConduitManager) register(end geminio.End) error {
-	err := end.Register(context.TODO(), proto.RPCReportConduit, cm.ReportConduit)
+	err := end.Register(context.TODO(), proto.RPCReportNetworks, cm.ReportConduit)
 	if err != nil {
 		log.Errorf("conduit manager register, register ReportConduit err: %s", err)
 		return err
@@ -88,11 +105,12 @@ func (cm *ConduitManager) register(end geminio.End) error {
 		log.Errorf("conduit manager register, register PullCluster err: %s", err)
 		return err
 	}
+	log.Infof("conduit manager register functions for end: %s success", end.RemoteAddr().String())
 	return nil
 }
 
 func (cm *ConduitManager) ReportConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
-	request := &proto.ReportConduitRequest{}
+	request := &proto.ReportNetworksRequest{}
 	err := json.Unmarshal(req.Data(), request)
 	if err != nil {
 		rsp.SetError(err)
@@ -101,3 +119,13 @@ func (cm *ConduitManager) ReportConduit(_ context.Context, req geminio.Request, 
 }
 
 func (cm *ConduitManager) PullCluster(context.Context, geminio.Request, geminio.Response) {}
+
+func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
+	cm.mtx.Lock()
+	defer cm.mtx.Unlock()
+
+	log.Infof("conduit manager conn: %s offline", cb.RemoteAddr().String())
+
+	delete(cm.ends, cb.RemoteAddr().String())
+	return nil
+}

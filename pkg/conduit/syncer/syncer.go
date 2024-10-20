@@ -90,7 +90,33 @@ func (syncer *syncer) ReportServer(request *proto.ReportServerRequest) (*proto.R
 	}
 	data = rsp.Data()
 	response := &proto.ReportServerResponse{}
-	return response, err
+	err = json.Unmarshal(data, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.ReportClientResponse, error) {
+	data, err := json.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
+	req := syncer.end.NewRequest(data)
+	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportClient, req)
+	if err != nil {
+		return nil, err
+	}
+	if rsp.Error() != nil {
+		return nil, err
+	}
+	data = rsp.Data()
+	response := &proto.ReportClientResponse{}
+	err = json.Unmarshal(data, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // client only
@@ -176,7 +202,7 @@ func (syncer *syncer) sync(syncMode int) {
 	for {
 		<-ticker.C
 		if syncMode&SyncModeUp != 0 {
-			err := syncer.reportConduit()
+			err := syncer.report()
 			if err != nil {
 				log.Errorf("syncer sync, report agent err: %s", err)
 				continue
@@ -192,14 +218,14 @@ func (syncer *syncer) sync(syncMode int) {
 	}
 }
 
-func (syncer *syncer) reportConduit() error {
+func (syncer *syncer) report() error {
 	// conduit network
 	// currently we ignore bridges, and all local networks should be accessable by conduit
 	networks, err := network.ListNetworks()
 	if err != nil {
 		return err
 	}
-	request := &proto.ReportConduitRequest{
+	request := &proto.ReportNetworksRequest{
 		MachineID: syncer.machineid,
 		IPNets:    networks,
 	}
@@ -208,7 +234,7 @@ func (syncer *syncer) reportConduit() error {
 		return err
 	}
 	req := syncer.end.NewRequest(data)
-	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportConduit, req)
+	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportNetworks, req)
 	if err != nil {
 		return err
 	}
