@@ -1,6 +1,9 @@
 package service
 
-type Conduit interface{}
+type Conduit interface {
+	SetClient()
+	SetServer()
+}
 
 type conduit struct {
 }

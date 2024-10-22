@@ -33,8 +33,9 @@ type ConduitManager struct {
 	tmr       timer.Timer
 	idFactory id.IDFactory
 	// inflight ends
-	mtx  sync.RWMutex
-	ends map[string]*endNtime
+	mtx      sync.RWMutex
+	ends     map[uint64]*endNtime
+	conduits map[string]Conduit
 }
 
 func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*ConduitManager, error) {
@@ -45,6 +46,7 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*C
 		repo:                  repo,
 		idFactory:             id.DefaultIncIDCounter,
 		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
+		ends:                  map[uint64]*endNtime{},
 	}
 	ln, err := network.Listen(listen)
 	if err != nil {
@@ -86,7 +88,7 @@ func (cm *ConduitManager) handleConn(conn net.Conn) error {
 	}
 	log.Infof("conduit manager handle conn: %s", conn.RemoteAddr().String())
 	cm.mtx.Lock()
-	cm.ends[end.RemoteAddr().String()] = &endNtime{
+	cm.ends[end.ClientID()] = &endNtime{
 		end:        end,
 		createTime: time.Now(),
 	}
@@ -95,11 +97,13 @@ func (cm *ConduitManager) handleConn(conn net.Conn) error {
 }
 
 func (cm *ConduitManager) register(end geminio.End) error {
-	err := end.Register(context.TODO(), proto.RPCReportNetworks, cm.ReportConduit)
+	// register ReportNetworks function
+	err := end.Register(context.TODO(), proto.RPCReportNetworks, cm.ReportNetworks)
 	if err != nil {
 		log.Errorf("conduit manager register, register ReportConduit err: %s", err)
 		return err
 	}
+	// register PullCluster function
 	err = end.Register(context.TODO(), proto.RPCPullCluster, cm.PullCluster)
 	if err != nil {
 		log.Errorf("conduit manager register, register PullCluster err: %s", err)
@@ -109,7 +113,20 @@ func (cm *ConduitManager) register(end geminio.End) error {
 	return nil
 }
 
-func (cm *ConduitManager) ReportConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	request := &proto.ReportClientRequest{}
+	err := json.Unmarshal(req.Data(), request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	cm.mtx.Lock()
+	defer cm.mtx.Unlock()
+	delete(cm.ends, req.ClientID())
+
+}
+
+func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	request := &proto.ReportNetworksRequest{}
 	err := json.Unmarshal(req.Data(), request)
 	if err != nil {
@@ -126,6 +143,6 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 
 	log.Infof("conduit manager conn: %s offline", cb.RemoteAddr().String())
 
-	delete(cm.ends, cb.RemoteAddr().String())
+	delete(cm.ends, cb.ClientID())
 	return nil
 }
