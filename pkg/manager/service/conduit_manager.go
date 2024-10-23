@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"strings"
 	"sync"
@@ -34,8 +35,8 @@ type ConduitManager struct {
 	idFactory id.IDFactory
 	// inflight ends
 	mtx      sync.RWMutex
-	ends     map[uint64]*endNtime
-	conduits map[string]Conduit
+	ends     map[uint64]*endNtime // key: clientID; value: end and create time
+	conduits map[string]Conduit   // key: machineID; value: Conduit
 }
 
 func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*ConduitManager, error) {
@@ -122,8 +123,52 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	}
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
-	delete(cm.ends, req.ClientID())
 
+	end, ok := cm.ends[req.ClientID()]
+	if !ok {
+		conduit, ok := cm.conduits[request.MachineID]
+		if !ok {
+			rsp.SetError(errors.New("end not found"))
+			return
+		}
+		conduit.SetClient()
+		return
+	}
+
+	conduit := NewConduit(end.end)
+	conduit.SetClient()
+	cm.conduits[request.MachineID] = conduit
+	// delete after transfer to conduits
+	delete(cm.ends, req.ClientID())
+}
+
+func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	request := &proto.ReportServerRequest{}
+	err := json.Unmarshal(req.Data(), request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+
+	cm.mtx.Lock()
+	defer cm.mtx.Unlock()
+
+	end, ok := cm.ends[req.ClientID()]
+	if !ok {
+		conduit, ok := cm.conduits[request.MachineID]
+		if !ok {
+			rsp.SetError(errors.New("end not found"))
+			return
+		}
+		conduit.SetServer()
+		return
+	}
+
+	conduit := NewConduit(end.end)
+	conduit.SetServer()
+	cm.conduits[request.MachineID] = conduit
+	// delete after transfer to conduits
+	delete(cm.ends, req.ClientID())
 }
 
 func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request, rsp geminio.Response) {
