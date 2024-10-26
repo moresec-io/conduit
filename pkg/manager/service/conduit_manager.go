@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/manager/apis"
+	"github.com/moresec-io/conduit/pkg/manager/cms"
 	"github.com/moresec-io/conduit/pkg/manager/config"
 	"github.com/moresec-io/conduit/pkg/manager/repo"
 	"github.com/moresec-io/conduit/pkg/network"
@@ -32,6 +34,7 @@ type ConduitManager struct {
 	ln        net.Listener
 	repo      repo.Repo
 	tmr       timer.Timer
+	cms       cms.CMS
 	idFactory id.IDFactory
 	// inflight ends
 	mtx      sync.RWMutex
@@ -39,7 +42,7 @@ type ConduitManager struct {
 	conduits map[string]Conduit   // key: machineID; value: Conduit
 }
 
-func NewConduitManager(conf *config.Config, repo repo.Repo, tmr timer.Timer) (*ConduitManager, error) {
+func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr timer.Timer) (*ConduitManager, error) {
 	listen := &conf.ConduitManager.Listen
 
 	cm := &ConduitManager{
@@ -149,6 +152,30 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 		rsp.SetError(err)
 		return
 	}
+	// request.Addr should be ip:port, conduit server side's listen addr must be specific
+	host, portstr, err := net.SplitHostPort(request.Addr)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	port, err := strconv.Atoi(portstr)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	ip := net.ParseIP(host)
+	// set ip as cert san
+	cert, err := cm.cms.GetCert(ip)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+
+	serverConfig := &ServerConfig{
+		Host: host,
+		Port: port,
+		Cert: cert,
+	}
 
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
@@ -160,12 +187,12 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 			rsp.SetError(errors.New("end not found"))
 			return
 		}
-		conduit.SetServer()
+		conduit.SetServer(serverConfig)
 		return
 	}
 
 	conduit := NewConduit(end.end)
-	conduit.SetServer()
+	conduit.SetServer(serverConfig)
 	cm.conduits[request.MachineID] = conduit
 	// delete after transfer to conduits
 	delete(cm.ends, req.ClientID())
