@@ -1,6 +1,9 @@
 package service
 
-import "github.com/singchia/geminio"
+import (
+	"github.com/moresec-io/conduit/pkg/manager/cms"
+	"github.com/singchia/geminio"
+)
 
 type ConduitType int
 
@@ -9,9 +12,15 @@ const (
 	ConduitServer
 )
 
+type ServerConfig struct {
+	Host string
+	Port int
+	Cert *cms.Cert
+}
+
 type Conduit interface {
 	SetClient()
-	SetServer()
+	SetServer(*ServerConfig)
 }
 
 func NewConduit(end geminio.End) Conduit {
@@ -21,14 +30,16 @@ func NewConduit(end geminio.End) Conduit {
 }
 
 type conduit struct {
-	end geminio.End
-	typ ConduitType
+	end          geminio.End
+	typ          ConduitType
+	serverConfig *ServerConfig
 }
 
 func (conduit *conduit) SetClient() {
 	conduit.typ |= ConduitClient
 }
 
-func (conduit *conduit) SetServer() {
+func (conduit *conduit) SetServer(config *ServerConfig) {
 	conduit.typ |= ConduitServer
+	conduit.serverConfig = config
 }
