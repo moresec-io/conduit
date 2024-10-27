@@ -21,6 +21,7 @@ type ServerConfig struct {
 type Conduit interface {
 	SetClient()
 	SetServer(*ServerConfig)
+	IsServer() bool
 }
 
 func NewConduit(end geminio.End) Conduit {
@@ -42,4 +43,8 @@ func (conduit *conduit) SetClient() {
 func (conduit *conduit) SetServer(config *ServerConfig) {
 	conduit.typ |= ConduitServer
 	conduit.serverConfig = config
+}
+
+func (conduit *conduit) IsServer() bool {
+	return (conduit.typ & ConduitServer) > 0
 }

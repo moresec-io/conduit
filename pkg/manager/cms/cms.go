@@ -26,6 +26,7 @@ type CMS interface {
 }
 
 type Cert struct {
+	CA   []byte
 	Cert []byte
 	Key  []byte
 }
@@ -183,6 +184,7 @@ func (cms *cms) initCert() error {
 	return nil
 }
 
+// generate cert if not exist
 func (cms *cms) GetCert(san net.IP) (*Cert, error) {
 	cert, err := cms.repo.GetCert(san.String())
 	if err != nil {
@@ -211,11 +213,17 @@ func (cms *cms) GetCert(san net.IP) (*Cert, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &Cert{cert, key}, nil
+			return &Cert{
+				CA:   cms.cacert,
+				Cert: cert,
+				Key:  key}, nil
 		}
 		return nil, err
 	}
-	return &Cert{cert.Cert, cert.Key}, nil
+	return &Cert{
+		CA:   cms.cacert,
+		Cert: cert.Cert,
+		Key:  cert.Key}, nil
 }
 
 func (cms *cms) ListCerts() ([]*Cert, error) {
@@ -226,6 +234,7 @@ func (cms *cms) ListCerts() ([]*Cert, error) {
 	certs := []*Cert{}
 	for _, mcert := range mcerts {
 		cert := &Cert{
+			CA:   cms.cacert,
 			Cert: mcert.Cert,
 			Key:  mcert.Key,
 		}

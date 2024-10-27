@@ -29,6 +29,19 @@ type endNtime struct {
 	createTime time.Time
 }
 
+type eventType int
+
+const (
+	_ eventType = iota
+	eventTypeServerOnline
+	eventTypeServerOffline
+)
+
+type event struct {
+	eventType eventType
+	conduit   Conduit
+}
+
 type ConduitManager struct {
 	*delegate.UnimplementedDelegate
 	ln        net.Listener
@@ -36,10 +49,13 @@ type ConduitManager struct {
 	tmr       timer.Timer
 	cms       cms.CMS
 	idFactory id.IDFactory
+	// event channel
+
 	// inflight ends
-	mtx      sync.RWMutex
-	ends     map[uint64]*endNtime // key: clientID; value: end and create time
-	conduits map[string]Conduit   // key: machineID; value: Conduit
+	mtx        sync.RWMutex
+	machineIDs map[uint64]string    // key: clientID; value: machineID
+	ends       map[string]*endNtime // key: machineID; value: end and create time
+	conduits   map[string]Conduit   // key: machineID; value: Conduit
 }
 
 func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr timer.Timer) (*ConduitManager, error) {
@@ -50,7 +66,7 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr tim
 		repo:                  repo,
 		idFactory:             id.DefaultIncIDCounter,
 		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
-		ends:                  map[uint64]*endNtime{},
+		ends:                  map[string]*endNtime{},
 	}
 	ln, err := network.Listen(listen)
 	if err != nil {
@@ -91,12 +107,14 @@ func (cm *ConduitManager) handleConn(conn net.Conn) error {
 		return err
 	}
 	log.Infof("conduit manager handle conn: %s", conn.RemoteAddr().String())
+
 	cm.mtx.Lock()
-	cm.ends[end.ClientID()] = &endNtime{
+	defer cm.mtx.Unlock()
+	cm.ends[string(end.Meta())] = &endNtime{
 		end:        end,
 		createTime: time.Now(),
 	}
-	cm.mtx.Unlock()
+	cm.machineIDs[end.ClientID()] = string(end.Meta())
 	return nil
 }
 
@@ -127,7 +145,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
 
-	end, ok := cm.ends[req.ClientID()]
+	end, ok := cm.ends[request.MachineID]
 	if !ok {
 		conduit, ok := cm.conduits[request.MachineID]
 		if !ok {
@@ -142,7 +160,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	conduit.SetClient()
 	cm.conduits[request.MachineID] = conduit
 	// delete after transfer to conduits
-	delete(cm.ends, req.ClientID())
+	delete(cm.ends, request.MachineID)
 }
 
 func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, rsp geminio.Response) {
@@ -171,6 +189,22 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 		return
 	}
 
+	// TODO transcation for reponse and cache
+
+	response := &proto.ReportServerResponse{
+		TLS: &proto.TLS{
+			CA:   cert.CA,
+			Cert: cert.Cert,
+			Key:  cert.Key,
+		},
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	rsp.SetData(data)
+
 	serverConfig := &ServerConfig{
 		Host: host,
 		Port: port,
@@ -180,7 +214,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
 
-	end, ok := cm.ends[req.ClientID()]
+	end, ok := cm.ends[request.MachineID]
 	if !ok {
 		conduit, ok := cm.conduits[request.MachineID]
 		if !ok {
@@ -195,7 +229,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	conduit.SetServer(serverConfig)
 	cm.conduits[request.MachineID] = conduit
 	// delete after transfer to conduits
-	delete(cm.ends, req.ClientID())
+	delete(cm.ends, request.MachineID)
 }
 
 func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request, rsp geminio.Response) {
@@ -215,6 +249,21 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 
 	log.Infof("conduit manager conn: %s offline", cb.RemoteAddr().String())
 
-	delete(cm.ends, cb.ClientID())
+	machineID, ok := cm.machineIDs[cb.ClientID()]
+	if !ok {
+		log.Errorf("conduit manager conn: %s offline, but machineID not found")
+		return nil
+	}
+	// delete inflight ends
+	delete(cm.ends, machineID)
+	// delete stored conduit
+	conduit, ok := cm.conduits[machineID]
+	if !ok {
+		// it's normal to be here
+		return nil
+	}
+	if conduit.IsServer() {
+		// notify all clients
+	}
 	return nil
 }
