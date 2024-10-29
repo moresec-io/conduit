@@ -50,6 +50,7 @@ type ConduitManager struct {
 	cms       cms.CMS
 	idFactory id.IDFactory
 	// event channel
+	eventCh chan *event
 
 	// inflight ends
 	mtx        sync.RWMutex
@@ -62,11 +63,14 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr tim
 	listen := &conf.ConduitManager.Listen
 
 	cm := &ConduitManager{
+		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
 		tmr:                   tmr,
 		repo:                  repo,
 		idFactory:             id.DefaultIncIDCounter,
-		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
+		eventCh:               make(chan *event, 1024),
+		machineIDs:            map[uint64]string{},
 		ends:                  map[string]*endNtime{},
+		conduits:              map[string]Conduit{},
 	}
 	ln, err := network.Listen(listen)
 	if err != nil {
@@ -89,6 +93,23 @@ func (cm *ConduitManager) Serve() error {
 		go cm.handleConn(conn)
 	}
 	return nil
+}
+
+func (cm *ConduitManager) notify() {
+	for {
+		event, ok := <-cm.eventCh
+		if !ok {
+			return
+		}
+		for _, conduit := range cm.conduits {
+			if conduit.IsClient() {
+				err := conduit.ServerOffline(event.conduit.MachineID())
+				if err != nil {
+					log.Errorf("conduit manager, server offline err: %s", err)
+				}
+			}
+		}
+	}
 }
 
 func (cm *ConduitManager) handleConn(conn net.Conn) error {
@@ -190,7 +211,6 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	}
 
 	// TODO transcation for reponse and cache
-
 	response := &proto.ReportServerResponse{
 		TLS: &proto.TLS{
 			CA:   cert.CA,
@@ -213,7 +233,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
-
+	// cache it
 	end, ok := cm.ends[request.MachineID]
 	if !ok {
 		conduit, ok := cm.conduits[request.MachineID]
@@ -222,14 +242,18 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 			return
 		}
 		conduit.SetServer(serverConfig)
-		return
+		// server conduit online event
+		cm.eventCh <- &event{
+			eventType: eventTypeServerOnline,
+			conduit:   conduit,
+		}
+	} else {
+		conduit := NewConduit(end.end)
+		conduit.SetServer(serverConfig)
+		cm.conduits[request.MachineID] = conduit
+		// delete after transfer to conduits
+		delete(cm.ends, request.MachineID)
 	}
-
-	conduit := NewConduit(end.end)
-	conduit.SetServer(serverConfig)
-	cm.conduits[request.MachineID] = conduit
-	// delete after transfer to conduits
-	delete(cm.ends, request.MachineID)
 }
 
 func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request, rsp geminio.Response) {
@@ -259,11 +283,15 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 	// delete stored conduit
 	conduit, ok := cm.conduits[machineID]
 	if !ok {
-		// it's normal to be here
+		// it's normal to be here when end connected but not registered
 		return nil
 	}
 	if conduit.IsServer() {
 		// notify all clients
+		cm.eventCh <- &event{
+			eventType: eventTypeServerOffline,
+			conduit:   conduit,
+		}
 	}
 	return nil
 }

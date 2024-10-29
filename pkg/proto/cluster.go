@@ -10,11 +10,11 @@ type PullClusterRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
-type Conduit struct {
+type Nets struct {
 	MachineID string      `json:"machine_id"`
 	IPNets    []net.IPNet `json:"ipnets"`
 }
 
 type PullClusterResponse struct {
-	Conduits []Conduit `json:"conduits"`
+	Cluster []Nets `json:"conduits"`
 }

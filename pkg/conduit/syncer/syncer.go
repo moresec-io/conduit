@@ -37,13 +37,13 @@ type syncer struct {
 
 	conf     *config.Config
 	mtx      sync.RWMutex
-	cache    []proto.Conduit // key: machineid, value: ipnets
+	cache    []proto.Nets // key: machineid, value: ipnets
 	syncMode int
 }
 
 func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
 	syncer := &syncer{
-		cache: []proto.Conduit{},
+		cache: []proto.Nets{},
 		repo:  repo,
 	}
 
@@ -155,7 +155,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 		}
 	}
 	if !found {
-		syncer.cache = append(syncer.cache, proto.Conduit{
+		syncer.cache = append(syncer.cache, proto.Nets{
 			MachineID: request.MachineID,
 			IPNets:    request.IPNets,
 		})
@@ -269,8 +269,8 @@ func (syncer *syncer) pullCluster() error {
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	removes, adds := compareConduits(syncer.cache, response.Conduits)
-	syncer.cache = response.Conduits
+	removes, adds := compareConduits(syncer.cache, response.Cluster)
+	syncer.cache = response.Cluster
 	for _, remove := range removes {
 		err = syncer.repo.DelIPSetIP(remove.IP)
 		if err != nil {
@@ -288,7 +288,7 @@ func (syncer *syncer) pullCluster() error {
 	return nil
 }
 
-func compareConduits(old, new []proto.Conduit) ([]net.IPNet, []net.IPNet) {
+func compareConduits(old, new []proto.Nets) ([]net.IPNet, []net.IPNet) {
 	keeps := []string{}
 	removes := []net.IPNet{}
 	adds := []net.IPNet{}
