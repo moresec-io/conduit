@@ -288,6 +288,7 @@ func (syncer *syncer) pullCluster() error {
 	return nil
 }
 
+// TODO change the logic
 func compareConduits(old, new []proto.Nets) ([]net.IPNet, []net.IPNet) {
 	keeps := []string{}
 	removes := []net.IPNet{}
