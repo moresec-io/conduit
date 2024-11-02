@@ -8,8 +8,8 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-func ListNetworks() ([]net.IPNet, error) {
-	ipNets := []net.IPNet{}
+func ListIPs() ([]net.IP, error) {
+	ips := []net.IP{}
 
 	handle, err := netlink.NewHandle()
 	if err != nil {
@@ -32,10 +32,10 @@ func ListNetworks() ([]net.IPNet, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			ipNets = append(ipNets, *addr.IPNet)
+			ips = append(ips, addr.IP)
 		}
 	}
-	return ipNets, nil
+	return ips, nil
 }
 
 func GetSocketMark(fd uintptr) (uint32, error) {

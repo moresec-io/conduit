@@ -35,15 +35,15 @@ type syncer struct {
 
 	repo repo.Repo
 
-	conf     *config.Config
-	mtx      sync.RWMutex
-	cache    []proto.Nets // key: machineid, value: ipnets
-	syncMode int
+	mtx   sync.RWMutex
+	cache []proto.Conduit // key: machineid, value: ipnets
+	// client use cert
+	clientTLS *proto.TLS
 }
 
 func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
 	syncer := &syncer{
-		cache: []proto.Nets{},
+		cache: []proto.Conduit{},
 		repo:  repo,
 	}
 
@@ -116,6 +116,7 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 	if err != nil {
 		return nil, err
 	}
+	syncer.clientTLS = response.TLS
 	return response, nil
 }
 
@@ -131,43 +132,31 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	found := false
 	for _, oldone := range syncer.cache {
-		if oldone.MachineID == request.MachineID {
-			// typically we won't be here
-			found = true
-			removes, adds := compareNets(oldone.IPNets, request.IPNets)
-			for _, remove := range removes {
-				err = syncer.repo.DelIPSetIP(remove.IP)
-				if err != nil {
-					log.Errorf("syncer online conduit, del ipset err: %s", err)
-					continue
-				}
+		if oldone.MachineID == request.Conduit.MachineID {
+			ok := compareConduit(&oldone, request.Conduit)
+			if ok {
+				return
 			}
-			for _, add := range adds {
-				err = syncer.repo.AddIPSetIP(add.IP)
-				if err != nil {
-					log.Errorf("syncer online conduit, add ipset err: %s", err)
-					continue
-				}
+			// update
+			for _, ip := range oldone.IPs {
+				syncer.repo.DelIPPolicy(ip.String())
 			}
-			break
+			for _, ip := range request.Conduit.IPs {
+				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+					PeerDialConfig: &network.DialConfig{
+						TLS: &network.TLS{
+							Enable: true,
+							MTLS:   true,
+							// TODO
+						},
+					},
+				})
+			}
+			return
 		}
 	}
-	if !found {
-		syncer.cache = append(syncer.cache, proto.Nets{
-			MachineID: request.MachineID,
-			IPNets:    request.IPNets,
-		})
-		for _, newone := range request.IPNets {
-			err = syncer.repo.AddIPSetIP(newone.IP)
-			if err != nil {
-				log.Errorf("syncer online conduit, add ipset err: %s", err)
-				continue
-			}
-		}
-	}
-	return
+	// add new conduit
 }
 
 // client only
@@ -184,8 +173,8 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 
 	for i, oldone := range syncer.cache {
 		if oldone.MachineID == request.MachineID {
-			for _, remove := range oldone.IPNets {
-				err = syncer.repo.DelIPSetIP(remove.IP)
+			for _, remove := range oldone.IPs {
+				err = syncer.repo.DelIPSetIP(remove)
 				if err != nil {
 					log.Errorf("syncer offline conduit, del ipset err: %s", err)
 					continue
@@ -220,14 +209,14 @@ func (syncer *syncer) sync(syncMode int) {
 
 func (syncer *syncer) report() error {
 	// conduit network
-	// currently we ignore bridges, and all local networks should be accessable by conduit
-	networks, err := network.ListNetworks()
+	// currently we ignore networks
+	networks, err := network.ListIPs()
 	if err != nil {
 		return err
 	}
 	request := &proto.ReportNetworksRequest{
 		MachineID: syncer.machineid,
-		IPNets:    networks,
+		IPs:       networks,
 	}
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -271,94 +260,86 @@ func (syncer *syncer) pullCluster() error {
 
 	removes, adds := compareConduits(syncer.cache, response.Cluster)
 	syncer.cache = response.Cluster
+	// updates
 	for _, remove := range removes {
-		err = syncer.repo.DelIPSetIP(remove.IP)
-		if err != nil {
-			log.Errorf("syncer pull cluster, del ipset err: %s", err)
-			continue
+		for _, ip := range remove.IPs {
+			err = syncer.repo.DelIPSetIP(ip)
+			if err != nil {
+				log.Errorf("syncer pull cluster, del ipset err: %s", err)
+				continue
+			}
 		}
 	}
 	for _, add := range adds {
-		err = syncer.repo.AddIPSetIP(add.IP)
-		if err != nil {
-			log.Errorf("syncer pull cluster, add ipset err: %s", err)
-			continue
+		for _, ip := range add.IPs {
+			err = syncer.repo.AddIPSetIP(ip)
+			if err != nil {
+				log.Errorf("syncer pull cluster, add ipset err: %s", err)
+				continue
+			}
 		}
 	}
 	return nil
 }
 
 // TODO change the logic
-func compareConduits(old, new []proto.Nets) ([]net.IPNet, []net.IPNet) {
-	keeps := []string{}
-	removes := []net.IPNet{}
-	adds := []net.IPNet{}
+func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit) {
+	keeps := map[string]struct{}{}
+	removes := []proto.Conduit{}
+	adds := []proto.Conduit{}
 
 	for _, oldone := range old {
 		found := false
 		for _, newone := range new {
 			if oldone.MachineID == newone.MachineID {
-				rs, as := compareNets(oldone.IPNets, newone.IPNets)
-				removes = append(removes, rs...)
-				adds = append(adds, as...)
+				if !compareConduit(&oldone, &newone) {
+					removes = append(removes, oldone)
+				} else {
+					// keeps store old ones
+					keeps[oldone.MachineID] = struct{}{}
+				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			for _, elem := range oldone.IPNets {
-				removes = append(removes, elem)
-			}
+			removes = append(removes, oldone)
 		}
 	}
 
 	for _, newone := range new {
-		found := false
-		for _, keep := range keeps {
-			if newone.MachineID == keep {
-				found = true
-				break
-			}
-		}
+		_, found := keeps[newone.MachineID]
 		if !found {
-			for _, elem := range newone.IPNets {
-				adds = append(adds, elem)
-			}
+			adds = append(adds, newone)
 		}
 	}
 	return removes, adds
 }
 
-func compareNets(old, new []net.IPNet) ([]net.IPNet, []net.IPNet) {
-	keeps := []net.IPNet{}
-	removes := []net.IPNet{}
-	adds := []net.IPNet{}
+func compareConduit(old, new *proto.Conduit) bool {
+	if old.Addr != new.Addr ||
+		old.Network != new.Network ||
+		!compareNets(old.IPs, new.IPs) {
+		return false
+	}
+	return true
+}
 
-	for _, oldnet := range old {
+func compareNets(old, new []net.IP) bool {
+	if len(old) != len(new) {
+		return false
+	}
+	for _, oldip := range old {
 		found := false
-		for _, newnet := range new {
-			if oldnet.String() == newnet.String() {
-				keeps = append(keeps, oldnet)
+		for _, newip := range new {
+			if oldip.Equal(newip) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			removes = append(removes, oldnet)
+			return false
 		}
 	}
-
-	for _, newnet := range new {
-		found := false
-		for _, keep := range keeps {
-			if newnet.String() == keep.String() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			adds = append(adds, newnet)
-		}
-	}
-	return removes, adds
+	return true
 }

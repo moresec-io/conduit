@@ -14,6 +14,9 @@ type Repo interface {
 	GetPolicyByIPPort(ipport string) *Policy
 	GetPolicyByPort(port int) *Policy
 	GetPolicy(ipport string, port int, ip string) *Policy
+	DelIPPortPolicy(ipport string)
+	DelPortPolicy(port int)
+	DelIPPolicy(ip string)
 
 	InitIPSet() error
 	AddIPSetIPPort(ip net.IP, port uint16) error

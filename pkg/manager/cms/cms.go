@@ -20,7 +20,8 @@ import (
 )
 
 type CMS interface {
-	GetCert(san net.IP) (*Cert, error)
+	GetClientCert() (*Cert, error)
+	GetServerCert(san net.IP) (*Cert, error)
 	ListCerts() ([]*Cert, error)
 	DelCertBySAN(san net.IP) error
 }
@@ -129,7 +130,7 @@ func (cms *cms) initCert() error {
 	createCert := func(san net.IP) (int64, error) {
 		years, months, days := getDate(certconf.NotAfter)
 		notBefore, notAfter := now, now.AddDate(years, months, days)
-		cert, key, err := cms.genCert(cms.cacert, cms.cakey, notBefore, notAfter, certconf.Organization, certconf.CommonName, san, 2048)
+		cert, key, err := cms.genServerCert(cms.cacert, cms.cakey, notBefore, notAfter, certconf.Organization, certconf.CommonName, san, 2048)
 		if err != nil {
 			return 0, err
 		}
@@ -185,7 +186,7 @@ func (cms *cms) initCert() error {
 }
 
 // generate cert if not exist
-func (cms *cms) GetCert(san net.IP) (*Cert, error) {
+func (cms *cms) GetServerCert(san net.IP) (*Cert, error) {
 	cert, err := cms.repo.GetCert(san.String())
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -193,7 +194,7 @@ func (cms *cms) GetCert(san net.IP) (*Cert, error) {
 			now := time.Now()
 			years, months, days := getDate(certconf.NotAfter)
 			notBefore, notAfter := now, now.AddDate(years, months, days)
-			cert, key, err := cms.genCert(cms.cacert, cms.cakey, notBefore, notAfter, certconf.Organization, certconf.CommonName, san, 2048)
+			cert, key, err := cms.genServerCert(cms.cacert, cms.cakey, notBefore, notAfter, certconf.Organization, certconf.CommonName, san, 2048)
 			if err != nil {
 				return nil, err
 			}
@@ -224,6 +225,22 @@ func (cms *cms) GetCert(san net.IP) (*Cert, error) {
 		CA:   cms.cacert,
 		Cert: cert.Cert,
 		Key:  cert.Key}, nil
+}
+
+func (cms *cms) GetClientCert() (*Cert, error) {
+	certconf := cms.conf.Cert.Cert
+	now := time.Now()
+	years, months, days := getDate(certconf.NotAfter)
+	notBefore, notAfter := now, now.AddDate(years, months, days)
+	cert, key, err := cms.genClientCert(cms.cacert, cms.cakey, notBefore, notAfter, certconf.Organization, 2048)
+	if err != nil {
+		return nil, err
+	}
+	return &Cert{
+		CA:   cms.cacert,
+		Cert: cert,
+		Key:  key,
+	}, nil
 }
 
 func (cms *cms) ListCerts() ([]*Cert, error) {
@@ -290,18 +307,7 @@ func (cms *cms) genCA(notBefore, notAfter time.Time,
 	return ca, x509.MarshalPKCS1PrivateKey(key), nil
 }
 
-func (cms *cms) GenCert(notAfterStr string, organization, commonName string, san net.IP) ([]byte, []byte, error) {
-	years, months, days := getDate(notAfterStr)
-	notBefore := time.Now()
-	notAfter := notBefore.AddDate(years, months, days)
-	ca, err := cms.repo.GetCA()
-	if err != nil {
-		return nil, nil, err
-	}
-	return cms.genCert(ca.Cert, ca.Key, notBefore, notAfter, organization, commonName, san, 2048)
-}
-
-func (cms *cms) genCert(cacert, cakey []byte,
+func (cms *cms) genServerCert(cacert, cakey []byte,
 	notBefore, notAfter time.Time,
 	organization, commonName string, san net.IP, bits int) ([]byte, []byte, error) {
 	ca, err := x509.ParseCertificate(cacert)
@@ -331,6 +337,43 @@ func (cms *cms) genCert(cacert, cakey []byte,
 		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		IPAddresses: []net.IP{san},
+	}
+	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, signkey.PublicKey, key)
+	if err != nil {
+		return nil, nil, err
+	}
+	return signcert, x509.MarshalPKCS1PrivateKey(signkey), nil
+}
+
+func (cms *cms) genClientCert(cacert, cakey []byte,
+	notBefore, notAfter time.Time, organization string, bits int) ([]byte, []byte, error) {
+	ca, err := x509.ParseCertificate(cacert)
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err := x509.ParsePKCS1PrivateKey(cakey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	signkey, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		return nil, nil, err
+	}
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, nil, err
+	}
+	certtemplate := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{organization},
+		},
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
 	}
 	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, signkey.PublicKey, key)
 	if err != nil {

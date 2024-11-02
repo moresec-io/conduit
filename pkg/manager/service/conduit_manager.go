@@ -163,6 +163,25 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 		rsp.SetError(err)
 		return
 	}
+	cert, err := cm.cms.GetClientCert()
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	response := &proto.ReportClientResponse{
+		TLS: &proto.TLS{
+			CA:   cert.CA,
+			Cert: cert.Cert,
+			Key:  cert.Key,
+		},
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	rsp.SetData(data)
+
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
 
@@ -204,7 +223,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	}
 	ip := net.ParseIP(host)
 	// set ip as cert san
-	cert, err := cm.cms.GetCert(ip)
+	cert, err := cm.cms.GetServerCert(ip)
 	if err != nil {
 		rsp.SetError(err)
 		return
