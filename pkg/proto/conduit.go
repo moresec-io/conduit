@@ -11,22 +11,22 @@ const (
 )
 
 type ReportNetworksRequest struct {
-	MachineID string      `json:"machine_id"`
-	IPNets    []net.IPNet `json:"ipnets"`
+	MachineID string   `json:"machine_id"`
+	IPs       []net.IP `json:"ips"`
 }
 
-type OnlineConduitRequest ReportNetworksRequest
+type OnlineConduitRequest struct {
+	Conduit *Conduit
+}
 
 type OfflineConduitRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
 type TLS struct {
-	Enable bool   `json:"enable"`
-	MTLS   bool   `json:"mtls"`
-	CA     []byte `json:"ca"`
-	Cert   []byte `json:"cert"`
-	Key    []byte `json:"key"`
+	CA   []byte `json:"ca"`
+	Cert []byte `json:"cert"`
+	Key  []byte `json:"key"`
 }
 
 type ReportServerRequest struct {
@@ -43,4 +43,6 @@ type ReportClientRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
-type ReportClientResponse struct{}
+type ReportClientResponse struct {
+	TLS *TLS
+}

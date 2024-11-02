@@ -11,10 +11,13 @@ type PullClusterRequest struct {
 }
 
 type Conduit struct {
-	MachineID string      `json:"machine_id"`
-	IPNets    []net.IPNet `json:"ipnets"`
+	MachineID string `json:"machine_id"`
+	Network   string
+	Addr      string
+	IPs       []net.IP `json:"ips"`
+	// IPNets []net.IPNet `json:"ipnets"` // unsupported yet
 }
 
 type PullClusterResponse struct {
-	Conduits []Conduit `json:"conduits"`
+	Cluster []Conduit `json:"conduits"`
 }

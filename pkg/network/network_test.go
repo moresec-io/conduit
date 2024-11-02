@@ -8,9 +8,9 @@ import (
 )
 
 func TestListNetworks(t *testing.T) {
-	ipNets, err := ListNetworks()
+	ips, err := ListIPs()
 	assert.Equal(t, nil, err)
-	for _, ipNet := range ipNets {
-		log.Info(ipNet.String())
+	for _, ip := range ips {
+		log.Info(ip.String())
 	}
 }
