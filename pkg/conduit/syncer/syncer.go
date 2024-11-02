@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"net"
@@ -39,8 +40,8 @@ type syncer struct {
 	mtx   sync.RWMutex
 	cache []proto.Conduit // key: machineid, value: ipnets
 	// client certs
-	clientCa  *x509.CertPool
-	clientTLS *proto.TLS
+	caPool     *x509.CertPool
+	clientCert *tls.Certificate
 }
 
 func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
@@ -102,23 +103,47 @@ func (syncer *syncer) ReportServer(request *proto.ReportServerRequest) (*proto.R
 func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.ReportClientResponse, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
+		log.Errorf("syncer report client, json marshal err: %s", err)
 		return nil, err
 	}
 	req := syncer.end.NewRequest(data)
 	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportClient, req)
 	if err != nil {
+		log.Errorf("syncer report client, call rpc err: %s", err)
 		return nil, err
 	}
 	if rsp.Error() != nil {
+		log.Errorf("syncer report client, response err: %s", err)
 		return nil, err
 	}
 	data = rsp.Data()
 	response := &proto.ReportClientResponse{}
 	err = json.Unmarshal(data, response)
 	if err != nil {
+		log.Errorf("syncer report client, json unmarshal err: %s", err)
 		return nil, err
 	}
-	syncer.clientTLS = response.TLS
+	// der format to x509 certiface
+	x509cert, err := x509.ParseCertificate(response.TLS.CA)
+	if err != nil {
+		log.Errorf("syncer report client, x509 parse certificate err: %s", err)
+		return nil, err
+	}
+	caPool := x509.NewCertPool()
+	caPool.AddCert(x509cert)
+	// keep ca
+	syncer.caPool = caPool
+	// keep client certificate, der format to rsa private key
+	privateKey, err := x509.ParsePKCS1PrivateKey(response.TLS.Key)
+	if err != nil {
+		log.Errorf("syncer report client, x509 parse pkcs #1 private key err: %s", err)
+		return nil, err
+	}
+	clientCert := &tls.Certificate{
+		Certificate: [][]byte{response.TLS.Cert},
+		PrivateKey:  privateKey,
+	}
+	syncer.clientCert = clientCert
 	return response, nil
 }
 
@@ -136,29 +161,68 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 
 	for _, oldone := range syncer.cache {
 		if oldone.MachineID == request.Conduit.MachineID {
+			// found and unchanged
 			ok := compareConduit(&oldone, request.Conduit)
 			if ok {
 				return
 			}
 			// update
 			for _, ip := range oldone.IPs {
+				// del policy
 				syncer.repo.DelIPPolicy(ip.String())
+				// del ipset
+				err := syncer.repo.DelIPSetIP(ip)
+				if err != nil {
+					log.Errorf("syncer online conduit, del ipset ip err: %s", err)
+					continue
+				}
 			}
 			for _, ip := range request.Conduit.IPs {
+				// add policy
 				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
 					PeerDialConfig: &network.DialConfig{
 						TLS: &network.TLS{
-							Enable: true,
-							MTLS:   true,
-							CAPool: pool,
+							Enable:             true,
+							MTLS:               true,
+							CAPool:             syncer.caPool,
+							Certs:              []tls.Certificate{*syncer.clientCert},
+							InsecureSkipVerify: false,
 						},
 					},
 				})
+				// add ipset
+				err := syncer.repo.AddIPSetIP(ip)
+				if err != nil {
+					log.Errorf("syncer online conduit, add ipset ip err: %s", err)
+					// TODO handle the unconsistency
+					continue
+				}
 			}
 			return
 		}
 	}
 	// add new conduit
+	for _, ip := range request.Conduit.IPs {
+		// add policy
+		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+			PeerDialConfig: &network.DialConfig{
+				TLS: &network.TLS{
+					Enable:             true,
+					MTLS:               true,
+					CAPool:             syncer.caPool,
+					Certs:              []tls.Certificate{*syncer.clientCert},
+					InsecureSkipVerify: false,
+				},
+			},
+		})
+		// add ipset
+		err := syncer.repo.AddIPSetIP(ip)
+		if err != nil {
+			log.Errorf("syncer online conduit, add ipset ip err: %s", err)
+			// TODO handle the unconsistency
+			continue
+		}
+	}
 }
 
 // client only
@@ -189,7 +253,7 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 }
 
 func (syncer *syncer) sync(syncMode int) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	for {
 		<-ticker.C
 		if syncMode&SyncModeUp != 0 {
@@ -265,6 +329,9 @@ func (syncer *syncer) pullCluster() error {
 	// updates
 	for _, remove := range removes {
 		for _, ip := range remove.IPs {
+			// del policy
+			syncer.repo.DelIPPolicy(ip.String())
+			// del ipset
 			err = syncer.repo.DelIPSetIP(ip)
 			if err != nil {
 				log.Errorf("syncer pull cluster, del ipset err: %s", err)
@@ -274,6 +341,18 @@ func (syncer *syncer) pullCluster() error {
 	}
 	for _, add := range adds {
 		for _, ip := range add.IPs {
+			syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+				PeerDialConfig: &network.DialConfig{
+					TLS: &network.TLS{
+						Enable:             true,
+						MTLS:               true,
+						CAPool:             syncer.caPool,
+						Certs:              []tls.Certificate{*syncer.clientCert},
+						InsecureSkipVerify: false,
+					},
+				},
+			})
+			// add ipset
 			err = syncer.repo.AddIPSetIP(ip)
 			if err != nil {
 				log.Errorf("syncer pull cluster, add ipset err: %s", err)
