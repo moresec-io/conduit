@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"net"
 	"sync"
@@ -37,7 +38,8 @@ type syncer struct {
 
 	mtx   sync.RWMutex
 	cache []proto.Conduit // key: machineid, value: ipnets
-	// client use cert
+	// client certs
+	clientCa  *x509.CertPool
 	clientTLS *proto.TLS
 }
 
@@ -148,7 +150,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 						TLS: &network.TLS{
 							Enable: true,
 							MTLS:   true,
-							// TODO
+							CAPool: pool,
 						},
 					},
 				})
