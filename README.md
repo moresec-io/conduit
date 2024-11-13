@@ -8,4 +8,4 @@
 
 ## 1. 架构：
 
-![](./pics/conduit.jpg)
+![](./docs/diagrams/conduit.jpg)
