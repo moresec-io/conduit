@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"net"
 
 	"github.com/moresec-io/conduit/pkg/manager/cms"
 	"github.com/moresec-io/conduit/pkg/proto"
@@ -20,6 +21,7 @@ type ServerConfig struct {
 	Host string
 	Port int
 	Cert *cms.Cert
+	IPs  []net.IP
 }
 
 type Conduit interface {

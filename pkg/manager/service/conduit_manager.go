@@ -101,13 +101,19 @@ func (cm *ConduitManager) notify() {
 		if !ok {
 			return
 		}
-		for _, conduit := range cm.conduits {
-			if conduit.IsClient() {
-				err := conduit.ServerOffline(event.conduit.MachineID())
-				if err != nil {
-					log.Errorf("conduit manager, server offline err: %s", err)
+		switch event.eventType {
+		case eventTypeServerOffline:
+			for _, conduit := range cm.conduits {
+				if conduit.IsClient() {
+					// notify all client
+					err := conduit.ServerOffline(event.conduit.MachineID())
+					if err != nil {
+						log.Errorf("conduit manager, server offline err: %s", err)
+					}
 				}
 			}
+		case eventTypeServerOnline:
+			// TODO
 		}
 	}
 }
@@ -152,6 +158,19 @@ func (cm *ConduitManager) register(end geminio.End) error {
 		log.Errorf("conduit manager register, register PullCluster err: %s", err)
 		return err
 	}
+	// register ReportClient function
+	err = end.Register(context.TODO(), proto.RPCReportClient, cm.ReportClient)
+	if err != nil {
+		log.Errorf("conduit manager register, register ReportClient err: %s", err)
+		return err
+	}
+	// register ReportServer function
+	err = end.Register(context.TODO(), proto.RPCReportServer, cm.ReportServer)
+	if err != nil {
+		log.Errorf("conduit manager register, register ReportServer err: %s", err)
+		return err
+	}
+
 	log.Infof("conduit manager register functions for end: %s success", end.RemoteAddr().String())
 	return nil
 }
@@ -244,10 +263,12 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	}
 	rsp.SetData(data)
 
+	// store
 	serverConfig := &ServerConfig{
 		Host: host,
 		Port: port,
 		Cert: cert,
+		IPs:  request.IPs,
 	}
 
 	cm.mtx.Lock()
@@ -282,6 +303,7 @@ func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request,
 		rsp.SetError(err)
 		return
 	}
+	// TODO update server networks
 }
 
 func (cm *ConduitManager) PullCluster(context.Context, geminio.Request, geminio.Response) {}

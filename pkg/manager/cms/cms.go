@@ -274,6 +274,7 @@ func (cms *cms) GenCA(notAfterStr string, organization, commonName string) ([]by
 	return cms.genCA(notBefore, notAfter, organization, commonName, 2048)
 }
 
+// DER format cert
 func (cms *cms) genCA(notBefore, notAfter time.Time,
 	organization, commonName string, bits int) ([]byte, []byte, error) {
 
@@ -345,6 +346,7 @@ func (cms *cms) genServerCert(cacert, cakey []byte,
 	return signcert, x509.MarshalPKCS1PrivateKey(signkey), nil
 }
 
+// DER format certs
 func (cms *cms) genClientCert(cacert, cakey []byte,
 	notBefore, notAfter time.Time, organization string, bits int) ([]byte, []byte, error) {
 	ca, err := x509.ParseCertificate(cacert)

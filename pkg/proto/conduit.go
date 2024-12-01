@@ -30,9 +30,10 @@ type TLS struct {
 }
 
 type ReportServerRequest struct {
-	MachineID string `json:"machine_id"`
-	Network   string `json:"network"`
-	Addr      string `json:"addr"`
+	MachineID string   `json:"machine_id"`
+	Network   string   `json:"network"`
+	Addr      string   `json:"addr"`
+	IPs       []net.IP `json:"ips"`
 }
 
 type ReportServerResponse struct {

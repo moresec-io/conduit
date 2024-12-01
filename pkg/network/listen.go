@@ -88,3 +88,33 @@ func Listen(listen *config.Listen) (net.Listener, error) {
 	}
 	return ln, nil
 }
+
+func ListenDERMTLS(network, addr string, caraw, certraw, keyraw []byte) (net.Listener, error) {
+	// ca
+	caPool := x509.NewCertPool()
+	ca, err := x509.ParseCertificate(caraw)
+	if err != nil {
+		return nil, err
+	}
+	caPool.AddCert(ca)
+	// cert
+	cert, err := x509.ParseCertificate(certraw)
+	if err != nil {
+		return nil, err
+	}
+	key, err := x509.ParsePKCS1PrivateKey(keyraw)
+	if err != nil {
+		return nil, err
+	}
+	tlscert := tls.Certificate{
+		Certificate: [][]byte{cert.Raw},
+		PrivateKey:  key,
+	}
+	return tls.Listen(network, addr, &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		CipherSuites: CiperSuites,
+		ClientCAs:    caPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{tlscert},
+	})
+}

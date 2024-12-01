@@ -60,7 +60,7 @@ func NewConduit() (*Conduit, error) {
 	}
 
 	if clienable {
-		cli, err = client.NewClient(config.Conf, repo)
+		cli, err = client.NewClient(config.Conf, syn, repo)
 		if err != nil {
 			log.Errorf("conduit new client err: %s", err)
 			return nil, err
