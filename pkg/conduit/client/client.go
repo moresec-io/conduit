@@ -24,8 +24,10 @@ import (
 	ierrors "github.com/moresec-io/conduit/pkg/conduit/errors"
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
+	"github.com/moresec-io/conduit/pkg/conduit/syncer"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
 	"github.com/moresec-io/conduit/pkg/network"
+	gproto "github.com/moresec-io/conduit/pkg/proto"
 )
 
 const (
@@ -58,7 +60,8 @@ type Client struct {
 	// static peers
 	peers map[int]*peer
 
-	repo repo.Repo
+	repo   repo.Repo
+	syncer syncer.Syncer
 
 	// forward rules
 	ipportPolicies map[string]*policy
@@ -66,17 +69,26 @@ type Client struct {
 	ipPolicies     map[string]*policy
 }
 
-func NewClient(conf *config.Config, repo repo.Repo) (*Client, error) {
+func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Client, error) {
 	client := &Client{
 		conf:           conf,
 		quit:           make(chan struct{}),
 		peers:          make(map[int]*peer),
 		repo:           repo,
+		syncer:         syncer,
 		ipportPolicies: make(map[string]*policy),
 		portPolicies:   make(map[int]*policy),
 		ipPolicies:     make(map[string]*policy),
 	}
-	// listen
+	if conf.Manager.Enable {
+		_, err := syncer.ReportClient(&gproto.ReportClientRequest{
+			MachineID: conf.MachineID,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	// client listen
 	ipPort := strings.Split(conf.Client.Listen, ":")
 	if len(ipPort) != 2 {
 		return nil, ierrors.ErrIllegalClientListenAddress
@@ -226,8 +238,7 @@ type ctx struct {
 	dstIP   string // real dst ip
 	dstPort int    // real dst port
 	dst     string // real dst in string
-	mark    uint32
-	// proxy info
+	// mark    uint32
 	dial  *policy // proxy
 	dstTo string  // dst after proxy
 }

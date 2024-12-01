@@ -39,10 +39,16 @@ func NewServer(conf *config.Config, syncer syncer.Syncer) (*Server, error) {
 		tls *gproto.TLS
 	)
 	if conf.Manager.Enable {
+		ips, err := network.ListIPs()
+		if err != nil {
+			return nil, err
+		}
+		// if manager configured, then use cluster tls configuration
 		response, err := syncer.ReportServer(&gproto.ReportServerRequest{
 			MachineID: conf.MachineID,
 			Network:   conf.Server.Network,
 			Addr:      conf.Server.Addr,
+			IPs:       ips,
 		})
 		if err != nil {
 			return nil, err
@@ -54,9 +60,10 @@ func NewServer(conf *config.Config, syncer syncer.Syncer) (*Server, error) {
 		syncer: syncer,
 	}
 	if tls != nil {
-
+		server.listener, err = network.ListenDERMTLS(conf.Server.Network, conf.Server.Addr, tls.CA, tls.Cert, tls.Key)
+	} else {
+		server.listener, err = network.Listen(&conf.Server.Listen)
 	}
-	server.listener, err = network.Listen(&conf.Server.Listen)
 	if err != nil {
 		return nil, err
 	}

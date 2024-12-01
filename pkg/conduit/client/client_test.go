@@ -21,7 +21,7 @@ func TestSetTables(t *testing.T) {
 	conf.Client.Listen = "127.0.0.1:5052" // client
 	t.Log(conf.Client.ForwardTable[0].Dst)
 
-	client, err := NewClient(conf, repo.NewRepo())
+	client, err := NewClient(conf, nil, repo.NewRepo())
 	if err != nil {
 		t.Error(err)
 		return
@@ -36,7 +36,7 @@ func TestUnSetTables(t *testing.T) {
 	conf.Client.Listen = "127.0.0.1:5052" // client
 	t.Log(conf.Client.ForwardTable[0].Dst)
 
-	client, err := NewClient(conf, repo.NewRepo())
+	client, err := NewClient(conf, nil, repo.NewRepo())
 	if err != nil {
 		t.Error(err)
 		return

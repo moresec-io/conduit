@@ -25,6 +25,7 @@ const (
 
 type Syncer interface {
 	ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error)
+	ReportClient(request *proto.ReportClientRequest) (*proto.ReportClientResponse, error)
 }
 
 func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (Syncer, error) {
@@ -38,7 +39,7 @@ type syncer struct {
 	repo repo.Repo
 
 	mtx   sync.RWMutex
-	cache []proto.Conduit // key: machineid, value: ipnets
+	cache []proto.Conduit // key: machineid, value: conduits
 	// client certs
 	caPool     *x509.CertPool
 	clientCert *tls.Certificate
@@ -194,7 +195,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 				err := syncer.repo.AddIPSetIP(ip)
 				if err != nil {
 					log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-					// TODO handle the unconsistency
+					// TODO handle the inconsistency
 					continue
 				}
 			}
@@ -219,7 +220,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 		err := syncer.repo.AddIPSetIP(ip)
 		if err != nil {
 			log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-			// TODO handle the unconsistency
+			// TODO handle the inconsistency
 			continue
 		}
 	}
@@ -239,8 +240,11 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 
 	for i, oldone := range syncer.cache {
 		if oldone.MachineID == request.MachineID {
-			for _, remove := range oldone.IPs {
-				err = syncer.repo.DelIPSetIP(remove)
+			for _, ip := range oldone.IPs {
+				// del policy
+				syncer.repo.DelIPPolicy(ip.String())
+				// del ipset
+				err = syncer.repo.DelIPSetIP(ip)
 				if err != nil {
 					log.Errorf("syncer offline conduit, del ipset err: %s", err)
 					continue
@@ -257,7 +261,7 @@ func (syncer *syncer) sync(syncMode int) {
 	for {
 		<-ticker.C
 		if syncMode&SyncModeUp != 0 {
-			err := syncer.report()
+			err := syncer.reportNetworks()
 			if err != nil {
 				log.Errorf("syncer sync, report agent err: %s", err)
 				continue
@@ -273,7 +277,7 @@ func (syncer *syncer) sync(syncMode int) {
 	}
 }
 
-func (syncer *syncer) report() error {
+func (syncer *syncer) reportNetworks() error {
 	// conduit network
 	// currently we ignore networks
 	networks, err := network.ListIPs()
