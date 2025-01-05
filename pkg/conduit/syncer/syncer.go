@@ -185,66 +185,17 @@ func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, 
 				return
 			}
 			// del ips
-			for _, ip := range elem.IPs {
-				// del policy
-				syncer.repo.DelIPPolicy(ip.String())
-				// del ipset
-				err := syncer.repo.DelIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer online conduit, del ipset ip err: %s", err)
-					continue
-				}
-			}
+			syncer.delResources(elem.IPs)
 			log.Infof("syncer conduit online, conduit: %s deleted ips: %v", conduit.MachineID, elem.IPs)
 			// add new ips
 			elem.IPs = conduit.IPs
-			for _, ip := range elem.IPs {
-				// add policy
-				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-					PeerDialConfig: &network.DialConfig{
-						TLS: &network.TLS{
-							Enable:             true,
-							MTLS:               true,
-							CAPool:             syncer.caPool,
-							Certs:              []tls.Certificate{*syncer.clientCert},
-							InsecureSkipVerify: false,
-						},
-					},
-				})
-				// add ipset
-				err := syncer.repo.AddIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-					// TODO handle the inconsistency
-					continue
-				}
-			}
+			syncer.addResources(elem.IPs)
 			log.Infof("syncer conduit online, conduit: %s add ips: %v success", conduit.MachineID, elem.IPs)
 			return
 		}
 	}
 	// add new conduit
-	for _, ip := range conduit.IPs {
-		// add policy
-		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-			PeerDialConfig: &network.DialConfig{
-				TLS: &network.TLS{
-					Enable:             true,
-					MTLS:               true,
-					CAPool:             syncer.caPool,
-					Certs:              []tls.Certificate{*syncer.clientCert},
-					InsecureSkipVerify: false,
-				},
-			},
-		})
-		// add ipset
-		err := syncer.repo.AddIPSetIP(ip)
-		if err != nil {
-			log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-			// TODO handle the inconsistency
-			continue
-		}
-	}
+	syncer.addResources(conduit.IPs)
 	syncer.cache = append(syncer.cache, proto.Conduit{
 		MachineID: conduit.MachineID,
 		Network:   conduit.Network,
@@ -266,24 +217,10 @@ func (syncer *syncer) syncConduitOffline(_ context.Context, req geminio.Request,
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for i, oldone := range syncer.cache {
-		if oldone.MachineID == request.MachineID {
-			for _, ip := range oldone.IPs {
-				// del policy
-				syncer.repo.DelIPPolicy(ip.String())
-				// del ipset
-				err = syncer.repo.DelIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer offline conduit, del ipset err: %s", err)
-					continue
-				}
-			}
-			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
-			log.Infof("syncer conduit offline, del conduit: %s success", request.MachineID)
-			return
-		}
+	ok := syncer.delConduit(request.MachineID)
+	if !ok {
+		log.Warnf("syncer conduit offline, conduit: %s to delete not found", request.MachineID)
 	}
-	log.Warnf("syncer conduit offline, conduit: %s to delete not found", request.MachineID)
 }
 
 // client only
@@ -302,38 +239,10 @@ func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.
 	for _, elem := range syncer.cache {
 		if elem.MachineID == request.MachineID {
 			// del old ips
-			for _, ip := range elem.IPs {
-				// del policy
-				syncer.repo.DelIPPolicy(ip.String())
-				// del ipset
-				err = syncer.repo.DelIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer conduit network changed, del ipset err: %s", err)
-					continue
-				}
-			}
+			syncer.delResources(elem.IPs)
 			// add new ips
 			elem.IPs = request.IPs
-			for _, ip := range elem.IPs {
-				// add policy
-				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-					PeerDialConfig: &network.DialConfig{
-						TLS: &network.TLS{
-							Enable:             true,
-							MTLS:               true,
-							CAPool:             syncer.caPool,
-							Certs:              []tls.Certificate{*syncer.clientCert},
-							InsecureSkipVerify: false,
-						},
-					},
-				})
-				// add ipset
-				err := syncer.repo.AddIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer conduit network changed, add ipset ip err: %s", err)
-					continue
-				}
-			}
+			syncer.addResources(elem.IPs)
 			break
 		}
 	}
@@ -414,42 +323,66 @@ func (syncer *syncer) pullCluster() error {
 	defer syncer.mtx.Unlock()
 
 	removes, adds := compareConduits(syncer.cache, response.Cluster)
+	// replace all
 	syncer.cache = response.Cluster
 	// updates
 	for _, remove := range removes {
-		for _, ip := range remove.IPs {
-			// del policy
-			syncer.repo.DelIPPolicy(ip.String())
-			// del ipset
-			err = syncer.repo.DelIPSetIP(ip)
-			if err != nil {
-				log.Errorf("syncer pull cluster, del ipset err: %s", err)
-				continue
-			}
-		}
+		syncer.delResources(remove.IPs)
 	}
 	for _, add := range adds {
-		for _, ip := range add.IPs {
-			syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-				PeerDialConfig: &network.DialConfig{
-					TLS: &network.TLS{
-						Enable:             true,
-						MTLS:               true,
-						CAPool:             syncer.caPool,
-						Certs:              []tls.Certificate{*syncer.clientCert},
-						InsecureSkipVerify: false,
-					},
-				},
-			})
-			// add ipset
-			err = syncer.repo.AddIPSetIP(ip)
-			if err != nil {
-				log.Errorf("syncer pull cluster, add ipset err: %s", err)
-				continue
-			}
-		}
+		syncer.addResources(add.IPs)
 	}
 	return nil
+}
+
+func (syncer *syncer) delConduit(machineID string) bool {
+	for i, elem := range syncer.cache {
+		if elem.MachineID == machineID {
+			// del resources
+			syncer.delResources(elem.IPs)
+			// del cache
+			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
+			log.Infof("syncer delete conduit, del conduit: %s success", machineID)
+			return true
+		}
+	}
+	return false
+}
+
+func (syncer *syncer) delResources(ips []net.IP) {
+	for _, ip := range ips {
+		// del policy
+		syncer.repo.DelIPPolicy(ip.String())
+		// del ipset
+		err := syncer.repo.DelIPSetIP(ip)
+		if err != nil {
+			log.Errorf("syncer offline conduit, del ipset err: %s", err)
+			continue
+		}
+	}
+}
+
+func (syncer *syncer) addResources(ips []net.IP) {
+	for _, ip := range ips {
+		// add policy
+		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+			PeerDialConfig: &network.DialConfig{
+				TLS: &network.TLS{
+					Enable:             true,
+					MTLS:               true,
+					CAPool:             syncer.caPool,
+					Certs:              []tls.Certificate{*syncer.clientCert},
+					InsecureSkipVerify: false,
+				},
+			},
+		})
+		// add ipset
+		err := syncer.repo.AddIPSetIP(ip)
+		if err != nil {
+			log.Errorf("syncer pull cluster, add ipset err: %s", err)
+			continue
+		}
+	}
 }
 
 // TODO optimize the logic
@@ -487,7 +420,8 @@ func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit
 }
 
 func compareConduit(old, new *proto.Conduit) bool {
-	if old.Addr != new.Addr ||
+	if old.MachineID != new.MachineID ||
+		old.Addr != new.Addr ||
 		old.Network != new.Network ||
 		!utils.CompareNets(old.IPs, new.IPs) {
 		return false

@@ -1,0 +1,32 @@
+conduit_manager:
+  listen:
+   network: "tcp"
+   addr: "0.0.0.0:5051"
+   tls:
+    enable: false
+    mtls: false
+    cas: 
+      - ./cert/ca/ca.crt
+    certs:
+        - cert: ./cert/manager/manager.crt
+          key: ./cert/manager/manager.key
+
+db:
+  driver: "sqlite"
+  address: "/opt/conduit/manager/data/"
+  db: "manager.db"
+  debug: true
+
+cert: # cert strategy for conduits
+  ca:
+    not_after: 1,0,0 # 1 year 0 month 0 day
+    common_name: "conduit.com"
+  cert:
+    not_after: 1,0,0
+    common_name: "conduit.com"
+    organization: "moresec.com"
+
+log:
+  maxsize: 10
+  level: info
+  file: ./manager.log

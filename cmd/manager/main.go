@@ -1,9 +1,8 @@
-package manager
+package main
 
 import (
 	"context"
 
-	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/sigaction"
 	"github.com/moresec-io/conduit/pkg/manager"
 	"github.com/moresec-io/conduit/pkg/manager/service"
@@ -12,12 +11,14 @@ import (
 func main() {
 	container, err := manager.BuildContainer()
 	if err != nil {
-		log.Errorf("manager build container err: %s", err)
 		return
 	}
-	container.Invoke(func(cm *service.ConduitManager) {
+	err = container.Invoke(func(cm *service.ConduitManager) {
 		cm.Serve()
 	})
+	if err != nil {
+		return
+	}
 
 	sig := sigaction.NewSignal()
 	sig.Wait(context.TODO())
