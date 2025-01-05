@@ -17,6 +17,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/manager/repo"
 	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
+	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	"github.com/singchia/geminio/delegate"
 	"github.com/singchia/geminio/pkg/id"
@@ -348,6 +349,12 @@ func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request,
 	conduit, ok := cm.conduits[request.MachineID]
 	if !ok {
 		rsp.SetError(errors.New("end not found"))
+		cm.mtx.RUnlock()
+		return
+	}
+	// compare
+	if utils.CompareNets(request.IPs, conduit.GetServerConfig().IPs) {
+		// nothing changed
 		cm.mtx.RUnlock()
 		return
 	}

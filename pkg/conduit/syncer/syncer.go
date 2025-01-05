@@ -14,6 +14,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
+	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	gclient "github.com/singchia/geminio/client"
 )
@@ -59,43 +60,55 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 	opt.SetMeta([]byte(conf.MachineID))
 	end, err := gclient.NewEndWithDialer(dialer, opt)
 	if err != nil {
+		log.Errorf("new syncer, geminio dial manager err: %s, sync mode: %d", err, syncMode)
 		return nil, err
 	}
 	syncer.end = end
 
 	// only downlink cares about other conduits online/offline
 	if syncMode&SyncModeDown != 0 {
-		err = end.Register(context.TODO(), proto.RPCSyncConduitOnline, syncer.onlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOnline, syncer.syncConduitOnline)
 		if err != nil {
+			log.Errorf("new syncer, register sync conduit online err: %s", err)
 			return nil, err
 		}
-		err = end.Register(context.TODO(), proto.RPCSyncConduitOffline, syncer.offlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOffline, syncer.syncConduitOffline)
 		if err != nil {
+			log.Errorf("new syncer, register sync conduit offline err: %s", err)
+			return nil, err
+		}
+		err = end.Register(context.TODO(), proto.RPCSyncConduitNetworksChanged, syncer.syncConduitNetworksChanged)
+		if err != nil {
+			log.Errorf("new syncer, register sync conduit networks changed err: %s", err)
 			return nil, err
 		}
 	}
 
-	go syncer.report(syncMode)
+	go syncer.sync(syncMode)
 	return syncer, nil
 }
 
 func (syncer *syncer) ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
+		log.Errorf("syncer report server, json marshal err: %s", err)
 		return nil, err
 	}
 	req := syncer.end.NewRequest(data)
 	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportServer, req)
 	if err != nil {
+		log.Errorf("syncer report server, call rpc err: %s", err)
 		return nil, err
 	}
 	if rsp.Error() != nil {
+		log.Errorf("syncer report server, response err: %s", err)
 		return nil, err
 	}
 	data = rsp.Data()
 	response := &proto.ReportServerResponse{}
 	err = json.Unmarshal(data, response)
 	if err != nil {
+		log.Errorf("syncer report server, json unmarshal response err: %s", err)
 		return nil, err
 	}
 	return response, nil
@@ -117,6 +130,7 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 		log.Errorf("syncer report client, response err: %s", err)
 		return nil, err
 	}
+	// manager returned ca and cert for client
 	data = rsp.Data()
 	response := &proto.ReportClientResponse{}
 	err = json.Unmarshal(data, response)
@@ -149,26 +163,29 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 }
 
 // client only
-func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.SyncConduitOnlineRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
+		log.Errorf("syncer conduit online, json unmarshal err: %s", err)
 		rsp.SetError(err)
 		return
 	}
+	conduit := request.Conduit
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for _, oldone := range syncer.cache {
-		if oldone.MachineID == request.Conduit.MachineID {
+	for _, elem := range syncer.cache {
+		if elem.MachineID == conduit.MachineID {
 			// found and unchanged
-			ok := compareConduit(&oldone, request.Conduit)
+			ok := compareConduit(&elem, conduit)
 			if ok {
+				log.Infof("syncer conduit online, conduit: %s unchanged", conduit.MachineID)
 				return
 			}
-			// update
-			for _, ip := range oldone.IPs {
+			// del ips
+			for _, ip := range elem.IPs {
 				// del policy
 				syncer.repo.DelIPPolicy(ip.String())
 				// del ipset
@@ -178,7 +195,10 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 					continue
 				}
 			}
-			for _, ip := range request.Conduit.IPs {
+			log.Infof("syncer conduit online, conduit: %s deleted ips: %v", conduit.MachineID, elem.IPs)
+			// add new ips
+			elem.IPs = conduit.IPs
+			for _, ip := range elem.IPs {
 				// add policy
 				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
 					PeerDialConfig: &network.DialConfig{
@@ -199,11 +219,12 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 					continue
 				}
 			}
+			log.Infof("syncer conduit online, conduit: %s add ips: %v success", conduit.MachineID, elem.IPs)
 			return
 		}
 	}
 	// add new conduit
-	for _, ip := range request.Conduit.IPs {
+	for _, ip := range conduit.IPs {
 		// add policy
 		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
 			PeerDialConfig: &network.DialConfig{
@@ -224,10 +245,17 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 			continue
 		}
 	}
+	syncer.cache = append(syncer.cache, proto.Conduit{
+		MachineID: conduit.MachineID,
+		Network:   conduit.Network,
+		Addr:      conduit.Addr,
+		IPs:       conduit.IPs,
+	})
+	log.Infof("syncer conduit online, add new conduit: %s, addr: %s, ips: %v success", conduit.MachineID, conduit.Addr, conduit.IPs)
 }
 
 // client only
-func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) syncConduitOffline(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.SyncConduitOfflineRequest{}
 	err := json.Unmarshal(data, request)
@@ -251,12 +279,67 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 				}
 			}
 			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
+			log.Infof("syncer conduit offline, del conduit: %s success", request.MachineID)
+			return
+		}
+	}
+	log.Warnf("syncer conduit offline, conduit: %s to delete not found", request.MachineID)
+}
+
+// client only
+func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	data := req.Data()
+	request := &proto.SyncConduitNetworksChangedRequest{}
+	err := json.Unmarshal(data, request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+
+	syncer.mtx.Lock()
+	defer syncer.mtx.Unlock()
+
+	for _, elem := range syncer.cache {
+		if elem.MachineID == request.MachineID {
+			// del old ips
+			for _, ip := range elem.IPs {
+				// del policy
+				syncer.repo.DelIPPolicy(ip.String())
+				// del ipset
+				err = syncer.repo.DelIPSetIP(ip)
+				if err != nil {
+					log.Errorf("syncer conduit network changed, del ipset err: %s", err)
+					continue
+				}
+			}
+			// add new ips
+			elem.IPs = request.IPs
+			for _, ip := range elem.IPs {
+				// add policy
+				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+					PeerDialConfig: &network.DialConfig{
+						TLS: &network.TLS{
+							Enable:             true,
+							MTLS:               true,
+							CAPool:             syncer.caPool,
+							Certs:              []tls.Certificate{*syncer.clientCert},
+							InsecureSkipVerify: false,
+						},
+					},
+				})
+				// add ipset
+				err := syncer.repo.AddIPSetIP(ip)
+				if err != nil {
+					log.Errorf("syncer conduit network changed, add ipset ip err: %s", err)
+					continue
+				}
+			}
 			break
 		}
 	}
 }
 
-func (syncer *syncer) report(syncMode int) {
+func (syncer *syncer) sync(syncMode int) {
 	ticker := time.NewTicker(60 * time.Second)
 	for {
 		<-ticker.C
@@ -277,6 +360,7 @@ func (syncer *syncer) report(syncMode int) {
 	}
 }
 
+// server report local networks to manager
 func (syncer *syncer) reportNetworks() error {
 	// conduit network
 	// currently we ignore networks
@@ -303,6 +387,7 @@ func (syncer *syncer) reportNetworks() error {
 	return nil
 }
 
+// client pull cluster
 func (syncer *syncer) pullCluster() error {
 	request := &proto.PullClusterRequest{
 		MachineID: syncer.machineid,
@@ -367,7 +452,7 @@ func (syncer *syncer) pullCluster() error {
 	return nil
 }
 
-// TODO change the logic
+// TODO optimize the logic
 func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit) {
 	keeps := map[string]struct{}{}
 	removes := []proto.Conduit{}
@@ -404,27 +489,8 @@ func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit
 func compareConduit(old, new *proto.Conduit) bool {
 	if old.Addr != new.Addr ||
 		old.Network != new.Network ||
-		!compareNets(old.IPs, new.IPs) {
+		!utils.CompareNets(old.IPs, new.IPs) {
 		return false
-	}
-	return true
-}
-
-func compareNets(old, new []net.IP) bool {
-	if len(old) != len(new) {
-		return false
-	}
-	for _, oldip := range old {
-		found := false
-		for _, newip := range new {
-			if oldip.Equal(newip) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
 	}
 	return true
 }
