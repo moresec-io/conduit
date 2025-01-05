@@ -35,6 +35,7 @@ const (
 	_ eventType = iota
 	eventTypeServerOnline
 	eventTypeServerOffline
+	eventTypeServerNetworkChanged
 )
 
 type event struct {
@@ -78,6 +79,8 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr tim
 		return nil, err
 	}
 	cm.ln = ln
+	go cm.notify()
+
 	return cm, nil
 }
 
@@ -105,15 +108,32 @@ func (cm *ConduitManager) notify() {
 		case eventTypeServerOffline:
 			for _, conduit := range cm.conduits {
 				if conduit.IsClient() {
-					// notify all client
+					if conduit.MachineID() == event.conduit.MachineID() {
+						// ignore the event source conduit
+						continue
+					}
+					// notify all clients
 					err := conduit.ServerOffline(event.conduit.MachineID())
 					if err != nil {
-						log.Errorf("conduit manager, server offline err: %s", err)
+						log.Errorf("conduit manager, call conduit server offline err: %s", err)
 					}
 				}
 			}
 		case eventTypeServerOnline:
-			// TODO
+			for _, conduit := range cm.conduits {
+				if conduit.IsClient() {
+					// notify all clients
+					err := conduit.ServerOnline(&proto.Conduit{
+						MachineID: conduit.MachineID(),
+						Network:   conduit.GetServerConfig().Network,
+						Addr:      conduit.GetServerConfig().Addr,
+						IPs:       conduit.GetServerConfig().IPs,
+					})
+					if err != nil {
+						log.Errorf("conduit manager, call conduit server online err: %s", err)
+					}
+				}
+			}
 		}
 	}
 }
@@ -235,7 +255,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 		rsp.SetError(err)
 		return
 	}
-	port, err := strconv.Atoi(portstr)
+	_, err = strconv.Atoi(portstr)
 	if err != nil {
 		rsp.SetError(err)
 		return
@@ -265,10 +285,10 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 
 	// store
 	serverConfig := &ServerConfig{
-		Host: host,
-		Port: port,
-		Cert: cert,
-		IPs:  request.IPs,
+		Network: request.Network,
+		Addr:    request.Addr,
+		Cert:    cert,
+		IPs:     request.IPs,
 	}
 
 	cm.mtx.Lock()

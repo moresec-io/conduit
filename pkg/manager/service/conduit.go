@@ -18,18 +18,20 @@ const (
 )
 
 type ServerConfig struct {
-	Host string
-	Port int
-	Cert *cms.Cert
-	IPs  []net.IP
+	Addr    string
+	Network string
+	Cert    *cms.Cert
+	IPs     []net.IP
 }
 
 type Conduit interface {
 	SetClient()
+	GetServerConfig() *ServerConfig
 	SetServer(*ServerConfig)
 	IsClient() bool
 	IsServer() bool
 	ServerOffline(machineID string) error
+	ServerOnline(serverConduit *proto.Conduit) error
 	MachineID() string
 }
 
@@ -50,6 +52,10 @@ func (conduit *conduit) SetClient() {
 	conduit.typ |= ConduitClient
 }
 
+func (conduit *conduit) GetServerConfig() *ServerConfig {
+	return conduit.serverConfig
+}
+
 func (conduit *conduit) SetServer(config *ServerConfig) {
 	conduit.typ |= ConduitServer
 	conduit.serverConfig = config
@@ -64,7 +70,7 @@ func (conduit *conduit) IsClient() bool {
 }
 
 func (conduit *conduit) ServerOffline(machineID string) error {
-	request := &proto.OfflineConduitRequest{
+	request := &proto.SyncOfflineConduitRequest{
 		MachineID: machineID,
 	}
 	data, err := json.Marshal(request)
@@ -76,6 +82,23 @@ func (conduit *conduit) ServerOffline(machineID string) error {
 	if err != nil {
 		return err
 	}
+	if rsp.Error() != nil {
+		return rsp.Error()
+	}
+	return nil
+}
+
+func (conduit *conduit) ServerOnline(serverConduit *proto.Conduit) error {
+	request := &proto.SyncOnlineConduitRequest{
+		Conduit: serverConduit,
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	req := conduit.end.NewRequest(data)
+	rsp, err := conduit.end.Call(context.TODO(), proto.RPCOnlineConduit, req)
 	if err != nil {
 		return err
 	}
