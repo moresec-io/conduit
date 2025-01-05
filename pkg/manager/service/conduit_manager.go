@@ -84,18 +84,20 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr tim
 	return cm, nil
 }
 
-func (cm *ConduitManager) Serve() error {
-	for {
-		conn, err := cm.ln.Accept()
-		if err != nil {
-			if !strings.Contains(err.Error(), apis.ErrStrUseOfClosedConnection) {
-				return err
+func (cm *ConduitManager) Serve() {
+	go func() error {
+		for {
+			conn, err := cm.ln.Accept()
+			if err != nil {
+				if !strings.Contains(err.Error(), apis.ErrStrUseOfClosedConnection) {
+					return err
+				}
+				break
 			}
-			break
+			go cm.handleConn(conn)
 		}
-		go cm.handleConn(conn)
-	}
-	return nil
+		return nil
+	}()
 }
 
 func (cm *ConduitManager) notify() {
@@ -421,4 +423,17 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 		}
 	}
 	return nil
+}
+
+func (cm *ConduitManager) Close() {
+	cm.mtx.Lock()
+	defer cm.mtx.Unlock()
+
+	for _, end := range cm.ends {
+		end.end.Close()
+	}
+
+	for _, conduit := range cm.conduits {
+		conduit.Close()
+	}
 }

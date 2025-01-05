@@ -40,6 +40,9 @@ type Conduit interface {
 
 	// meta
 	MachineID() string
+
+	// lifecycle
+	Close() error
 }
 
 func NewConduit(end geminio.End) Conduit {
@@ -143,4 +146,8 @@ func (conduit *conduit) ServerNetworksChanged(machineID string, ips []net.IP) er
 // meta
 func (conduit *conduit) MachineID() string {
 	return conduit.machineID
+}
+
+func (conduit *conduit) Close() error {
+	return conduit.end.Close()
 }

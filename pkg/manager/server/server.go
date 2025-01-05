@@ -13,6 +13,7 @@ type Server struct {
 	tmr timer.Timer
 }
 
+// TODO add control plane
 func NewServer(conf *config.Config, repo repo.Repo) (*Server, error) {
 	listen := &conf.ControlPlane.Listen
 	ln, err := network.Listen(listen)
@@ -25,9 +26,7 @@ func NewServer(conf *config.Config, repo repo.Repo) (*Server, error) {
 	// http and geminio server
 	cm := cmux.New(ln)
 	// the first byte is geminio Version, the second byte is geminio ConnPacket
-	// TODO we should have a magic number here
 	_ = cm.Match(cmux.PrefixMatcher(string([]byte{0x01, 0x01})))
 	_ = cm.Match(cmux.Any())
-	// TODO
 	return server, nil
 }
