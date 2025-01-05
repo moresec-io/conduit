@@ -25,13 +25,20 @@ type ServerConfig struct {
 }
 
 type Conduit interface {
+	// caches
 	SetClient()
+	IsClient() bool
 	GetServerConfig() *ServerConfig
 	SetServer(*ServerConfig)
-	IsClient() bool
+	SetServerIPs([]net.IP)
 	IsServer() bool
+
+	// events
 	ServerOffline(machineID string) error
 	ServerOnline(serverConduit *proto.Conduit) error
+	ServerNetworksChanged(machineID string, ips []net.IP) error
+
+	// meta
 	MachineID() string
 }
 
@@ -48,12 +55,17 @@ type conduit struct {
 	machineID    string
 }
 
+// caches
 func (conduit *conduit) SetClient() {
 	conduit.typ |= ConduitClient
 }
 
 func (conduit *conduit) GetServerConfig() *ServerConfig {
 	return conduit.serverConfig
+}
+
+func (conduit *conduit) SetServerIPs(ips []net.IP) {
+	conduit.serverConfig.IPs = ips
 }
 
 func (conduit *conduit) SetServer(config *ServerConfig) {
@@ -69,8 +81,9 @@ func (conduit *conduit) IsClient() bool {
 	return (conduit.typ & ConduitClient) > 0
 }
 
+// events
 func (conduit *conduit) ServerOffline(machineID string) error {
-	request := &proto.SyncOfflineConduitRequest{
+	request := &proto.SyncConduitOfflineRequest{
 		MachineID: machineID,
 	}
 	data, err := json.Marshal(request)
@@ -78,7 +91,7 @@ func (conduit *conduit) ServerOffline(machineID string) error {
 		return err
 	}
 	req := conduit.end.NewRequest(data)
-	rsp, err := conduit.end.Call(context.TODO(), proto.RPCOfflineConduit, req)
+	rsp, err := conduit.end.Call(context.TODO(), proto.RPCSyncConduitOffline, req)
 	if err != nil {
 		return err
 	}
@@ -89,16 +102,15 @@ func (conduit *conduit) ServerOffline(machineID string) error {
 }
 
 func (conduit *conduit) ServerOnline(serverConduit *proto.Conduit) error {
-	request := &proto.SyncOnlineConduitRequest{
+	request := &proto.SyncConduitOnlineRequest{
 		Conduit: serverConduit,
 	}
-
 	data, err := json.Marshal(request)
 	if err != nil {
 		return err
 	}
 	req := conduit.end.NewRequest(data)
-	rsp, err := conduit.end.Call(context.TODO(), proto.RPCOnlineConduit, req)
+	rsp, err := conduit.end.Call(context.TODO(), proto.RPCSyncConduitOnline, req)
 	if err != nil {
 		return err
 	}
@@ -108,6 +120,27 @@ func (conduit *conduit) ServerOnline(serverConduit *proto.Conduit) error {
 	return nil
 }
 
+func (conduit *conduit) ServerNetworksChanged(machineID string, ips []net.IP) error {
+	request := &proto.SyncConduitNetworksChangedRequest{
+		MachineID: machineID,
+		IPs:       ips,
+	}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	req := conduit.end.NewRequest(data)
+	rsp, err := conduit.end.Call(context.TODO(), proto.RPCSyncConduitNetworksChanged, req)
+	if err != nil {
+		return err
+	}
+	if rsp.Error() != nil {
+		return rsp.Error()
+	}
+	return nil
+}
+
+// meta
 func (conduit *conduit) MachineID() string {
 	return conduit.machineID
 }
