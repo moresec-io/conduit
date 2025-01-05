@@ -404,7 +404,7 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 
 	machineID, ok := cm.machineIDs[cb.ClientID()]
 	if !ok {
-		log.Errorf("conduit manager conn: %s offline, but machineID not found")
+		log.Errorf("conduit manager conn: %s offline, but machineID not found", cb.Meta())
 		return nil
 	}
 	// delete inflight ends
