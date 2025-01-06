@@ -75,7 +75,7 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 		}
 	}
 
-	go syncer.sync(syncMode)
+	go syncer.report(syncMode)
 	return syncer, nil
 }
 
@@ -151,7 +151,7 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 // client only
 func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
-	request := &proto.OnlineConduitRequest{}
+	request := &proto.SyncOnlineConduitRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
 		rsp.SetError(err)
@@ -229,7 +229,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 // client only
 func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
-	request := &proto.OfflineConduitRequest{}
+	request := &proto.SyncOfflineConduitRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
 		rsp.SetError(err)
@@ -256,7 +256,7 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 	}
 }
 
-func (syncer *syncer) sync(syncMode int) {
+func (syncer *syncer) report(syncMode int) {
 	ticker := time.NewTicker(60 * time.Second)
 	for {
 		<-ticker.C

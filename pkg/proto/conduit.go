@@ -10,17 +10,20 @@ const (
 	RPCOfflineConduit = "offline_conduit"
 )
 
-type ReportNetworksRequest struct {
-	MachineID string   `json:"machine_id"`
-	IPs       []net.IP `json:"ips"`
-}
-
-type OnlineConduitRequest struct {
+// manager sync to clients
+type SyncOnlineConduitRequest struct {
 	Conduit *Conduit
 }
 
-type OfflineConduitRequest struct {
+// manager sync to clients
+type SyncOfflineConduitRequest struct {
 	MachineID string `json:"machine_id"`
+}
+
+// manager sync to clients
+type SyncNetworksRequest struct {
+	MachineID string   `json:"machine_id"`
+	IPs       []net.IP `json:"ips"`
 }
 
 type TLS struct {
@@ -29,6 +32,7 @@ type TLS struct {
 	Key  []byte `json:"key"`
 }
 
+// server report to manager
 type ReportServerRequest struct {
 	MachineID string   `json:"machine_id"`
 	Network   string   `json:"network"`
@@ -40,10 +44,17 @@ type ReportServerResponse struct {
 	TLS *TLS
 }
 
+// server report to manager
 type ReportClientRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
 type ReportClientResponse struct {
 	TLS *TLS
+}
+
+// server report to manager
+type ReportNetworksRequest struct {
+	MachineID string   `json:"machine_id"`
+	IPs       []net.IP `json:"ips"`
 }
