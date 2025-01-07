@@ -72,6 +72,7 @@ type Config struct {
 	} `yaml:"log"`
 }
 
+// dig:provider
 func NewConfig() (*Config, error) {
 	time.LoadLocation("Asia/Shanghai")
 

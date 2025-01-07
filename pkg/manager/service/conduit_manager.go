@@ -122,16 +122,32 @@ func (cm *ConduitManager) notify() {
 		case eventTypeServerOnline:
 			for _, conduit := range cm.conduits {
 				if conduit.IsClient() {
+					if conduit.MachineID() == event.conduit.MachineID() {
+						// ignore the event source conduit
+						continue
+					}
 					// notify all clients
 					err := conduit.ServerOnline(&proto.Conduit{
-						MachineID: conduit.MachineID(),
-						Network:   conduit.GetServerConfig().Network,
-						Addr:      conduit.GetServerConfig().Addr,
-						IPs:       conduit.GetServerConfig().IPs,
+						MachineID: event.conduit.MachineID(),
+						Network:   event.conduit.GetServerConfig().Network,
+						Addr:      event.conduit.GetServerConfig().Addr,
+						IPs:       event.conduit.GetServerConfig().IPs,
 					})
 					if err != nil {
 						log.Errorf("conduit manager, call conduit server online err: %s", err)
 					}
+				}
+			}
+		case eventTypeServerNetworkChanged:
+			for _, conduit := range cm.conduits {
+				if conduit.MachineID() == event.conduit.MachineID() {
+					// ignore the event source conduit
+					continue
+				}
+				// notify all clients
+				err := conduit.ServerNetworksChanged(conduit.MachineID(), event.conduit.GetServerConfig().IPs)
+				if err != nil {
+					log.Errorf("conduit manager, call conduit server network changed err: %s", err)
 				}
 			}
 		}
@@ -172,12 +188,6 @@ func (cm *ConduitManager) register(end geminio.End) error {
 		log.Errorf("conduit manager register, register ReportConduit err: %s", err)
 		return err
 	}
-	// register PullCluster function
-	err = end.Register(context.TODO(), proto.RPCPullCluster, cm.PullCluster)
-	if err != nil {
-		log.Errorf("conduit manager register, register PullCluster err: %s", err)
-		return err
-	}
 	// register ReportClient function
 	err = end.Register(context.TODO(), proto.RPCReportClient, cm.ReportClient)
 	if err != nil {
@@ -188,6 +198,12 @@ func (cm *ConduitManager) register(end geminio.End) error {
 	err = end.Register(context.TODO(), proto.RPCReportServer, cm.ReportServer)
 	if err != nil {
 		log.Errorf("conduit manager register, register ReportServer err: %s", err)
+		return err
+	}
+	// register PullCluster function
+	err = end.Register(context.TODO(), proto.RPCPullCluster, cm.PullCluster)
+	if err != nil {
+		log.Errorf("conduit manager register, register PullCluster err: %s", err)
 		return err
 	}
 
@@ -242,6 +258,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	delete(cm.ends, request.MachineID)
 }
 
+// server report to manager
 func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	request := &proto.ReportServerRequest{}
 	err := json.Unmarshal(req.Data(), request)
@@ -316,6 +333,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	}
 }
 
+// server report to manager
 func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	request := &proto.ReportNetworksRequest{}
 	err := json.Unmarshal(req.Data(), request)
@@ -323,11 +341,59 @@ func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request,
 		rsp.SetError(err)
 		return
 	}
-	// TODO update server networks
+	// update server networks
+	cm.mtx.RLock()
+	conduit, ok := cm.conduits[request.MachineID]
+	if !ok {
+		rsp.SetError(errors.New("end not found"))
+		cm.mtx.RUnlock()
+		return
+	}
+	conduit.SetServerIPs(request.IPs)
+	cm.mtx.RUnlock()
+
+	// server conduit network update event
+	cm.eventCh <- &event{
+		eventType: eventTypeServerNetworkChanged,
+		conduit:   conduit,
+	}
 }
 
-func (cm *ConduitManager) PullCluster(context.Context, geminio.Request, geminio.Response) {}
+func (cm *ConduitManager) PullCluster(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	request := &proto.PullClusterRequest{}
+	err := json.Unmarshal(req.Data(), request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	// pull all server conduits
+	cm.mtx.RLock()
+	conduits := []proto.Conduit{}
+	for _, conduit := range cm.conduits {
+		if conduit.IsServer() {
+			conduits = append(conduits, proto.Conduit{
+				MachineID: conduit.MachineID(),
+				Network:   conduit.GetServerConfig().Network,
+				Addr:      conduit.GetServerConfig().Addr,
+				IPs:       conduit.GetServerConfig().IPs,
+			})
+		}
+	}
+	cm.mtx.RUnlock()
 
+	// return to clients
+	response := &proto.PullClusterResponse{
+		Cluster: conduits,
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+	rsp.SetData(data)
+}
+
+// connection layer offline
 func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()

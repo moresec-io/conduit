@@ -3,25 +3,29 @@ package proto
 import "net"
 
 const (
+	// client or server report to manager
 	RPCReportServer   = "report_server"
 	RPCReportClient   = "report_cliet"
 	RPCReportNetworks = "report_networks"
-	RPCOnlineConduit  = "online_conduit"
-	RPCOfflineConduit = "offline_conduit"
+
+	// manager report to server
+	RPCSyncConduitOnline          = "sync_conduit_online"
+	RPCSyncConduitOffline         = "sync_conduit_offline"
+	RPCSyncConduitNetworksChanged = "sync_conduit_networks_changed"
 )
 
 // manager sync to clients
-type SyncOnlineConduitRequest struct {
+type SyncConduitOnlineRequest struct {
 	Conduit *Conduit
 }
 
 // manager sync to clients
-type SyncOfflineConduitRequest struct {
+type SyncConduitOfflineRequest struct {
 	MachineID string `json:"machine_id"`
 }
 
 // manager sync to clients
-type SyncNetworksRequest struct {
+type SyncConduitNetworksChangedRequest struct {
 	MachineID string   `json:"machine_id"`
 	IPs       []net.IP `json:"ips"`
 }

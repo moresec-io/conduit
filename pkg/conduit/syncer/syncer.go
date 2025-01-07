@@ -65,11 +65,11 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 
 	// only downlink cares about other conduits online/offline
 	if syncMode&SyncModeDown != 0 {
-		err = end.Register(context.TODO(), proto.RPCOnlineConduit, syncer.onlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOnline, syncer.onlineConduit)
 		if err != nil {
 			return nil, err
 		}
-		err = end.Register(context.TODO(), proto.RPCOfflineConduit, syncer.offlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOffline, syncer.offlineConduit)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +151,7 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 // client only
 func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
-	request := &proto.SyncOnlineConduitRequest{}
+	request := &proto.SyncConduitOnlineRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
 		rsp.SetError(err)
@@ -229,7 +229,7 @@ func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp 
 // client only
 func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
-	request := &proto.SyncOfflineConduitRequest{}
+	request := &proto.SyncConduitOfflineRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
 		rsp.SetError(err)
