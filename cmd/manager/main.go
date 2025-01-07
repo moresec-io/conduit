@@ -6,6 +6,7 @@ import (
 	"github.com/jumboframes/armorigo/log"
 	"github.com/jumboframes/armorigo/sigaction"
 	"github.com/moresec-io/conduit/pkg/manager"
+	"github.com/moresec-io/conduit/pkg/manager/service"
 )
 
 func main() {
@@ -14,10 +15,14 @@ func main() {
 		log.Errorf("manager build container err: %s", err)
 		return
 	}
-	container.Invoke(func() {})
+	container.Invoke(func(cm *service.ConduitManager) {
+		cm.Serve()
+	})
 
 	sig := sigaction.NewSignal()
 	sig.Wait(context.TODO())
 
-	container.Invoke(func() {})
+	container.Invoke(func(cm *service.ConduitManager) {
+		cm.Close()
+	})
 }
