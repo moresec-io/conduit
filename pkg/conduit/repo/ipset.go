@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/jumboframes/armorigo/log"
+	"github.com/moresec-io/conduit/pkg/conduit/errors"
 	"github.com/vishvananda/netlink"
 )
 
@@ -100,7 +101,7 @@ func addIPSetIP(ip net.IP) error {
 		IP: ip,
 	})
 	if err != nil {
-		log.Errorf("client del ip: %s err: %s", ip, err)
+		log.Errorf("client add ip: %s err: %s", ip, err)
 	}
 	return err
 }
@@ -139,29 +140,29 @@ func delIPSetIP(ip net.IP) error {
 func finiIPSet(level log.Level, prefix string) error {
 	// flush
 	err := netlink.IpsetFlush(ConduitIPSetIPPort)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetFlush(ConduitIPSetPort)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetFlush(ConduitIPSetIP)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, flush ipset: %s err: %s", prefix, ConduitIPSetIP, err)
 	}
 
 	// destroy
 	err = netlink.IpsetDestroy(ConduitIPSetPort)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetPort, err)
 	}
 	err = netlink.IpsetDestroy(ConduitIPSetIPPort)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIPPort, err)
 	}
 	err = netlink.IpsetDestroy(ConduitIPSetIP)
-	if err != nil {
+	if err != nil && !errors.IsErrNoSuchFileOrDirectory(err) {
 		log.Printf(level, "%s, destroy ipset: %s err: %s", prefix, ConduitIPSetIP, err)
 	}
 	return nil

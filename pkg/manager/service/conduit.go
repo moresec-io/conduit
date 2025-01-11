@@ -45,9 +45,10 @@ type Conduit interface {
 	Close() error
 }
 
-func NewConduit(end geminio.End) Conduit {
+func NewConduit(machineID string, end geminio.End) Conduit {
 	return &conduit{
-		end: end,
+		machineID: machineID,
+		end:       end,
 	}
 }
 

@@ -1,6 +1,9 @@
 package utils
 
-import "net"
+import (
+	"net"
+	"strings"
+)
 
 func CompareNets(old, new []net.IP) bool {
 	if len(old) != len(new) {
@@ -19,4 +22,14 @@ func CompareNets(old, new []net.IP) bool {
 		}
 	}
 	return true
+}
+
+type IPs []net.IP
+
+func (ips IPs) String() string {
+	ipstrs := []string{}
+	for _, ip := range ips {
+		ipstrs = append(ipstrs, ip.String())
+	}
+	return strings.Join(ipstrs, ",")
 }

@@ -48,8 +48,9 @@ type syncer struct {
 
 func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
 	syncer := &syncer{
-		cache: []proto.Conduit{},
-		repo:  repo,
+		machineid: conf.MachineID,
+		cache:     []proto.Conduit{},
+		repo:      repo,
 	}
 
 	// connect to manager
@@ -172,6 +173,8 @@ func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, 
 		rsp.SetError(err)
 		return
 	}
+
+	log.Debugf("syncer conduit online, response: %v", string(data))
 	conduit := request.Conduit
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
@@ -214,6 +217,8 @@ func (syncer *syncer) syncConduitOffline(_ context.Context, req geminio.Request,
 		rsp.SetError(err)
 		return
 	}
+
+	log.Debugf("syncer conduit offline, response: %v", string(data))
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
@@ -233,6 +238,7 @@ func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.
 		return
 	}
 
+	log.Debugf("syncer sync conduit networks changed, response: %v", string(data))
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
@@ -319,6 +325,7 @@ func (syncer *syncer) pullCluster() error {
 	if err != nil {
 		return err
 	}
+	log.Debugf("syncer pull cluster, response: %v", string(data))
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
@@ -327,9 +334,11 @@ func (syncer *syncer) pullCluster() error {
 	syncer.cache = response.Cluster
 	// updates
 	for _, remove := range removes {
+		log.Debugf("syncer pull cluster, del conduit: %s, ips: %s", remove.MachineID, utils.IPs(remove.IPs))
 		syncer.delResources(remove.IPs)
 	}
 	for _, add := range adds {
+		log.Debugf("syncer pull cluster, add conduit: %s, ip: %s", add.MachineID, utils.IPs(add.IPs))
 		syncer.addResources(add.IPs)
 	}
 	return nil

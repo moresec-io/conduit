@@ -339,7 +339,7 @@ func (cms *cms) genServerCert(cacert, cakey []byte,
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		IPAddresses: []net.IP{san},
 	}
-	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, signkey.PublicKey, key)
+	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, &signkey.PublicKey, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -377,8 +377,9 @@ func (cms *cms) genClientCert(cacert, cakey []byte,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
-	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, signkey.PublicKey, key)
+	signcert, err := x509.CreateCertificate(rand.Reader, &certtemplate, ca, &signkey.PublicKey, key)
 	if err != nil {
+		log.Errorf("cms gen client cert, x509 create certificate err: %s", err)
 		return nil, nil, err
 	}
 	return signcert, x509.MarshalPKCS1PrivateKey(signkey), nil
