@@ -14,6 +14,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
+	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	gclient "github.com/singchia/geminio/client"
 )
@@ -47,8 +48,9 @@ type syncer struct {
 
 func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, error) {
 	syncer := &syncer{
-		cache: []proto.Conduit{},
-		repo:  repo,
+		machineid: conf.MachineID,
+		cache:     []proto.Conduit{},
+		repo:      repo,
 	}
 
 	// connect to manager
@@ -59,43 +61,55 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 	opt.SetMeta([]byte(conf.MachineID))
 	end, err := gclient.NewEndWithDialer(dialer, opt)
 	if err != nil {
+		log.Errorf("new syncer, geminio dial manager err: %s, sync mode: %d", err, syncMode)
 		return nil, err
 	}
 	syncer.end = end
 
 	// only downlink cares about other conduits online/offline
 	if syncMode&SyncModeDown != 0 {
-		err = end.Register(context.TODO(), proto.RPCSyncConduitOnline, syncer.onlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOnline, syncer.syncConduitOnline)
 		if err != nil {
+			log.Errorf("new syncer, register sync conduit online err: %s", err)
 			return nil, err
 		}
-		err = end.Register(context.TODO(), proto.RPCSyncConduitOffline, syncer.offlineConduit)
+		err = end.Register(context.TODO(), proto.RPCSyncConduitOffline, syncer.syncConduitOffline)
 		if err != nil {
+			log.Errorf("new syncer, register sync conduit offline err: %s", err)
+			return nil, err
+		}
+		err = end.Register(context.TODO(), proto.RPCSyncConduitNetworksChanged, syncer.syncConduitNetworksChanged)
+		if err != nil {
+			log.Errorf("new syncer, register sync conduit networks changed err: %s", err)
 			return nil, err
 		}
 	}
 
-	go syncer.report(syncMode)
+	go syncer.sync(syncMode)
 	return syncer, nil
 }
 
 func (syncer *syncer) ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
+		log.Errorf("syncer report server, json marshal err: %s", err)
 		return nil, err
 	}
 	req := syncer.end.NewRequest(data)
 	rsp, err := syncer.end.Call(context.TODO(), proto.RPCReportServer, req)
 	if err != nil {
+		log.Errorf("syncer report server, call rpc err: %s", err)
 		return nil, err
 	}
 	if rsp.Error() != nil {
+		log.Errorf("syncer report server, response err: %s", err)
 		return nil, err
 	}
 	data = rsp.Data()
 	response := &proto.ReportServerResponse{}
 	err = json.Unmarshal(data, response)
 	if err != nil {
+		log.Errorf("syncer report server, json unmarshal response err: %s", err)
 		return nil, err
 	}
 	return response, nil
@@ -117,6 +131,7 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 		log.Errorf("syncer report client, response err: %s", err)
 		return nil, err
 	}
+	// manager returned ca and cert for client
 	data = rsp.Data()
 	response := &proto.ReportClientResponse{}
 	err = json.Unmarshal(data, response)
@@ -149,85 +164,52 @@ func (syncer *syncer) ReportClient(request *proto.ReportClientRequest) (*proto.R
 }
 
 // client only
-func (syncer *syncer) onlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.SyncConduitOnlineRequest{}
 	err := json.Unmarshal(data, request)
 	if err != nil {
+		log.Errorf("syncer conduit online, json unmarshal err: %s", err)
 		rsp.SetError(err)
 		return
 	}
+
+	log.Debugf("syncer conduit online, response: %v", string(data))
+	conduit := request.Conduit
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for _, oldone := range syncer.cache {
-		if oldone.MachineID == request.Conduit.MachineID {
+	for _, elem := range syncer.cache {
+		if elem.MachineID == conduit.MachineID {
 			// found and unchanged
-			ok := compareConduit(&oldone, request.Conduit)
+			ok := compareConduit(&elem, conduit)
 			if ok {
+				log.Infof("syncer conduit online, conduit: %s unchanged", conduit.MachineID)
 				return
 			}
-			// update
-			for _, ip := range oldone.IPs {
-				// del policy
-				syncer.repo.DelIPPolicy(ip.String())
-				// del ipset
-				err := syncer.repo.DelIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer online conduit, del ipset ip err: %s", err)
-					continue
-				}
-			}
-			for _, ip := range request.Conduit.IPs {
-				// add policy
-				syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-					PeerDialConfig: &network.DialConfig{
-						TLS: &network.TLS{
-							Enable:             true,
-							MTLS:               true,
-							CAPool:             syncer.caPool,
-							Certs:              []tls.Certificate{*syncer.clientCert},
-							InsecureSkipVerify: false,
-						},
-					},
-				})
-				// add ipset
-				err := syncer.repo.AddIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-					// TODO handle the inconsistency
-					continue
-				}
-			}
+			// del ips
+			syncer.delResources(elem.IPs)
+			log.Infof("syncer conduit online, conduit: %s deleted ips: %v", conduit.MachineID, elem.IPs)
+			// add new ips
+			elem.IPs = conduit.IPs
+			syncer.addResources(elem.IPs)
+			log.Infof("syncer conduit online, conduit: %s add ips: %v success", conduit.MachineID, elem.IPs)
 			return
 		}
 	}
 	// add new conduit
-	for _, ip := range request.Conduit.IPs {
-		// add policy
-		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-			PeerDialConfig: &network.DialConfig{
-				TLS: &network.TLS{
-					Enable:             true,
-					MTLS:               true,
-					CAPool:             syncer.caPool,
-					Certs:              []tls.Certificate{*syncer.clientCert},
-					InsecureSkipVerify: false,
-				},
-			},
-		})
-		// add ipset
-		err := syncer.repo.AddIPSetIP(ip)
-		if err != nil {
-			log.Errorf("syncer online conduit, add ipset ip err: %s", err)
-			// TODO handle the inconsistency
-			continue
-		}
-	}
+	syncer.addResources(conduit.IPs)
+	syncer.cache = append(syncer.cache, proto.Conduit{
+		MachineID: conduit.MachineID,
+		Network:   conduit.Network,
+		Addr:      conduit.Addr,
+		IPs:       conduit.IPs,
+	})
+	log.Infof("syncer conduit online, add new conduit: %s, addr: %s, ips: %v success", conduit.MachineID, conduit.Addr, conduit.IPs)
 }
 
 // client only
-func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp geminio.Response) {
+func (syncer *syncer) syncConduitOffline(_ context.Context, req geminio.Request, rsp geminio.Response) {
 	data := req.Data()
 	request := &proto.SyncConduitOfflineRequest{}
 	err := json.Unmarshal(data, request)
@@ -235,28 +217,44 @@ func (syncer *syncer) offlineConduit(_ context.Context, req geminio.Request, rsp
 		rsp.SetError(err)
 		return
 	}
+
+	log.Debugf("syncer conduit offline, response: %v", string(data))
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for i, oldone := range syncer.cache {
-		if oldone.MachineID == request.MachineID {
-			for _, ip := range oldone.IPs {
-				// del policy
-				syncer.repo.DelIPPolicy(ip.String())
-				// del ipset
-				err = syncer.repo.DelIPSetIP(ip)
-				if err != nil {
-					log.Errorf("syncer offline conduit, del ipset err: %s", err)
-					continue
-				}
-			}
-			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
+	ok := syncer.delConduit(request.MachineID)
+	if !ok {
+		log.Warnf("syncer conduit offline, conduit: %s to delete not found", request.MachineID)
+	}
+}
+
+// client only
+func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.Request, rsp geminio.Response) {
+	data := req.Data()
+	request := &proto.SyncConduitNetworksChangedRequest{}
+	err := json.Unmarshal(data, request)
+	if err != nil {
+		rsp.SetError(err)
+		return
+	}
+
+	log.Debugf("syncer sync conduit networks changed, response: %v", string(data))
+	syncer.mtx.Lock()
+	defer syncer.mtx.Unlock()
+
+	for _, elem := range syncer.cache {
+		if elem.MachineID == request.MachineID {
+			// del old ips
+			syncer.delResources(elem.IPs)
+			// add new ips
+			elem.IPs = request.IPs
+			syncer.addResources(elem.IPs)
 			break
 		}
 	}
 }
 
-func (syncer *syncer) report(syncMode int) {
+func (syncer *syncer) sync(syncMode int) {
 	ticker := time.NewTicker(60 * time.Second)
 	for {
 		<-ticker.C
@@ -277,6 +275,7 @@ func (syncer *syncer) report(syncMode int) {
 	}
 }
 
+// server report local networks to manager
 func (syncer *syncer) reportNetworks() error {
 	// conduit network
 	// currently we ignore networks
@@ -303,6 +302,7 @@ func (syncer *syncer) reportNetworks() error {
 	return nil
 }
 
+// client pull cluster
 func (syncer *syncer) pullCluster() error {
 	request := &proto.PullClusterRequest{
 		MachineID: syncer.machineid,
@@ -325,49 +325,76 @@ func (syncer *syncer) pullCluster() error {
 	if err != nil {
 		return err
 	}
+	log.Debugf("syncer pull cluster, response: %v", string(data))
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
 	removes, adds := compareConduits(syncer.cache, response.Cluster)
+	// replace all
 	syncer.cache = response.Cluster
 	// updates
 	for _, remove := range removes {
-		for _, ip := range remove.IPs {
-			// del policy
-			syncer.repo.DelIPPolicy(ip.String())
-			// del ipset
-			err = syncer.repo.DelIPSetIP(ip)
-			if err != nil {
-				log.Errorf("syncer pull cluster, del ipset err: %s", err)
-				continue
-			}
-		}
+		log.Debugf("syncer pull cluster, del conduit: %s, ips: %s", remove.MachineID, utils.IPs(remove.IPs))
+		syncer.delResources(remove.IPs)
 	}
 	for _, add := range adds {
-		for _, ip := range add.IPs {
-			syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
-				PeerDialConfig: &network.DialConfig{
-					TLS: &network.TLS{
-						Enable:             true,
-						MTLS:               true,
-						CAPool:             syncer.caPool,
-						Certs:              []tls.Certificate{*syncer.clientCert},
-						InsecureSkipVerify: false,
-					},
-				},
-			})
-			// add ipset
-			err = syncer.repo.AddIPSetIP(ip)
-			if err != nil {
-				log.Errorf("syncer pull cluster, add ipset err: %s", err)
-				continue
-			}
-		}
+		log.Debugf("syncer pull cluster, add conduit: %s, ip: %s", add.MachineID, utils.IPs(add.IPs))
+		syncer.addResources(add.IPs)
 	}
 	return nil
 }
 
-// TODO change the logic
+func (syncer *syncer) delConduit(machineID string) bool {
+	for i, elem := range syncer.cache {
+		if elem.MachineID == machineID {
+			// del resources
+			syncer.delResources(elem.IPs)
+			// del cache
+			syncer.cache = append(syncer.cache[:i], syncer.cache[i+1:]...)
+			log.Infof("syncer delete conduit, del conduit: %s success", machineID)
+			return true
+		}
+	}
+	return false
+}
+
+func (syncer *syncer) delResources(ips []net.IP) {
+	for _, ip := range ips {
+		// del policy
+		syncer.repo.DelIPPolicy(ip.String())
+		// del ipset
+		err := syncer.repo.DelIPSetIP(ip)
+		if err != nil {
+			log.Errorf("syncer offline conduit, del ipset err: %s", err)
+			continue
+		}
+	}
+}
+
+func (syncer *syncer) addResources(ips []net.IP) {
+	for _, ip := range ips {
+		// add policy
+		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
+			PeerDialConfig: &network.DialConfig{
+				TLS: &network.TLS{
+					Enable:             true,
+					MTLS:               true,
+					CAPool:             syncer.caPool,
+					Certs:              []tls.Certificate{*syncer.clientCert},
+					InsecureSkipVerify: false,
+				},
+			},
+		})
+		// add ipset
+		err := syncer.repo.AddIPSetIP(ip)
+		if err != nil {
+			log.Errorf("syncer pull cluster, add ipset err: %s", err)
+			continue
+		}
+	}
+}
+
+// TODO optimize the logic
 func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit) {
 	keeps := map[string]struct{}{}
 	removes := []proto.Conduit{}
@@ -402,29 +429,11 @@ func compareConduits(old, new []proto.Conduit) ([]proto.Conduit, []proto.Conduit
 }
 
 func compareConduit(old, new *proto.Conduit) bool {
-	if old.Addr != new.Addr ||
+	if old.MachineID != new.MachineID ||
+		old.Addr != new.Addr ||
 		old.Network != new.Network ||
-		!compareNets(old.IPs, new.IPs) {
+		!utils.CompareNets(old.IPs, new.IPs) {
 		return false
-	}
-	return true
-}
-
-func compareNets(old, new []net.IP) bool {
-	if len(old) != len(new) {
-		return false
-	}
-	for _, oldip := range old {
-		found := false
-		for _, newip := range new {
-			if oldip.Equal(newip) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
 	}
 	return true
 }

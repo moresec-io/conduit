@@ -49,8 +49,7 @@ func (client *Client) initProc() error {
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
-	log.Debugf("client init proc, enable route local net success, stdout: %s, stderr: %s",
-		infoO, strings.TrimSuffix(string(infoE), "\n"))
+	log.Debugf("client init proc, enable route local net success")
 	return nil
 }
 
@@ -61,7 +60,6 @@ func (client *Client) iniSysctl() error {
 			err, infoO, strings.TrimSuffix(string(infoE), "\n"))
 		return err
 	}
-	log.Debugf("client init proc, enable fwmark success, stdout: %s, stderr: %s",
-		infoO, strings.TrimSuffix(string(infoE), "\n"))
+	log.Debugf("client init proc, enable fwmark success")
 	return nil
 }

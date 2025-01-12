@@ -59,7 +59,7 @@ type Client struct {
 	Enable       bool          `yaml:"enable"`
 	Network      string        `yaml:"network"` // tcp, udp or tcp,udp
 	Listen       string        `yaml:"listen"`  // for tcp transparent
-	CheckTime    int           `yaml:"check_time,omitemtpy"`
+	CheckTime    int           `yaml:"check_time"`
 	ForwardTable []ForwardElem `yaml:"forward_table"`
 	Peers        []Peer        `yaml:"peers"`
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/manager/repo"
 	"github.com/moresec-io/conduit/pkg/network"
 	"github.com/moresec-io/conduit/pkg/proto"
+	"github.com/moresec-io/conduit/pkg/utils"
 	"github.com/singchia/geminio"
 	"github.com/singchia/geminio/delegate"
 	"github.com/singchia/geminio/pkg/id"
@@ -66,6 +67,7 @@ func NewConduitManager(conf *config.Config, repo repo.Repo, cms cms.CMS, tmr tim
 	cm := &ConduitManager{
 		UnimplementedDelegate: &delegate.UnimplementedDelegate{},
 		tmr:                   tmr,
+		cms:                   cms,
 		repo:                  repo,
 		idFactory:             id.DefaultIncIDCounter,
 		eventCh:               make(chan *event, 1024),
@@ -217,11 +219,14 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	request := &proto.ReportClientRequest{}
 	err := json.Unmarshal(req.Data(), request)
 	if err != nil {
+		log.Errorf("conduit manager report client, json unmarshal err: %s", err)
 		rsp.SetError(err)
 		return
 	}
+	log.Infof("conduit manager report client, machine_id: %s", request.MachineID)
 	cert, err := cm.cms.GetClientCert()
 	if err != nil {
+		log.Errorf("conduit manager report client, cms get client cert err: %s", err)
 		rsp.SetError(err)
 		return
 	}
@@ -234,6 +239,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	}
 	data, err := json.Marshal(response)
 	if err != nil {
+		log.Errorf("conduit manager report client, json marshal err: %s", err)
 		rsp.SetError(err)
 		return
 	}
@@ -246,6 +252,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 	if !ok {
 		conduit, ok := cm.conduits[request.MachineID]
 		if !ok {
+			log.Errorf("conduit manager report client, conduit: %s not found", request.MachineID)
 			rsp.SetError(errors.New("end not found"))
 			return
 		}
@@ -253,7 +260,7 @@ func (cm *ConduitManager) ReportClient(_ context.Context, req geminio.Request, r
 		return
 	}
 
-	conduit := NewConduit(end.end)
+	conduit := NewConduit(request.MachineID, end.end)
 	conduit.SetClient()
 	cm.conduits[request.MachineID] = conduit
 	// delete after transfer to conduits
@@ -268,6 +275,8 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 		rsp.SetError(err)
 		return
 	}
+	log.Infof("conduit manager report server, machine_id: %s, network: %s, addr: %s, ips: %s",
+		request.MachineID, request.Network, request.Addr, utils.IPs(request.IPs).String())
 	// request.Addr should be ip:port, conduit server side's listen addr must be specific
 	host, portstr, err := net.SplitHostPort(request.Addr)
 	if err != nil {
@@ -317,6 +326,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 	if !ok {
 		conduit, ok := cm.conduits[request.MachineID]
 		if !ok {
+			log.Errorf("conduit manager report server, conduit: %s not found", request.MachineID)
 			rsp.SetError(errors.New("end not found"))
 			return
 		}
@@ -327,7 +337,7 @@ func (cm *ConduitManager) ReportServer(_ context.Context, req geminio.Request, r
 			conduit:   conduit,
 		}
 	} else {
-		conduit := NewConduit(end.end)
+		conduit := NewConduit(request.MachineID, end.end)
 		conduit.SetServer(serverConfig)
 		cm.conduits[request.MachineID] = conduit
 		// delete after transfer to conduits
@@ -347,7 +357,14 @@ func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request,
 	cm.mtx.RLock()
 	conduit, ok := cm.conduits[request.MachineID]
 	if !ok {
+		log.Errorf("conduit manager report networks, conduit: %s not found", request.MachineID)
 		rsp.SetError(errors.New("end not found"))
+		cm.mtx.RUnlock()
+		return
+	}
+	// compare
+	if utils.CompareNets(request.IPs, conduit.GetServerConfig().IPs) {
+		// nothing changed
 		cm.mtx.RUnlock()
 		return
 	}
@@ -423,6 +440,10 @@ func (cm *ConduitManager) ConnOffline(cb delegate.ConnDescriber) error {
 		}
 	}
 	return nil
+}
+
+func (cm *ConduitManager) GetClientID(uint64, []byte) (uint64, error) {
+	return id.DefaultIncIDCounter.GetID(), nil
 }
 
 func (cm *ConduitManager) Close() {

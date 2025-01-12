@@ -22,16 +22,16 @@ var (
 )
 
 type DB struct {
-	Driver      string      `yaml:"driver"`
-	Username    string      `yaml:"username"`
-	Password    string      `yaml:"password"`
+	Driver      string      `yaml:"driver"` // support mysql or sqlite
 	Address     string      `yaml:"address"`
 	DB          string      `yaml:"db"`
 	Options     string      `yaml:"options"`
-	MaxIdleConn int64       `yaml:"max_idle_conn"`
-	MaxOpenConn int64       `yaml:"max_open_conn"`
 	Debug       bool        `yaml:"debug"`
-	TLS         *config.TLS `yaml:"tls"`
+	Username    string      `yaml:"username"`      // mysql only
+	Password    string      `yaml:"password"`      // mysql only
+	MaxIdleConn int64       `yaml:"max_idle_conn"` // mysql only
+	MaxOpenConn int64       `yaml:"max_open_conn"` // mysql only
+	TLS         *config.TLS `yaml:"tls"`           // mysql only
 }
 
 type Cert struct {
@@ -72,12 +72,12 @@ type Config struct {
 	} `yaml:"log"`
 }
 
-// dig:provider
 func NewConfig() (*Config, error) {
 	time.LoadLocation("Asia/Shanghai")
 
 	err := initCmd()
 	if err != nil {
+		log.Warnf("new config, init cmd err: %s", err)
 		return nil, err
 	}
 

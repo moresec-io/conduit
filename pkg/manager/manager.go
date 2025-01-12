@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/manager/cms"
 	"github.com/moresec-io/conduit/pkg/manager/config"
 	"github.com/moresec-io/conduit/pkg/manager/repo"
@@ -13,6 +14,7 @@ func BuildContainer() (*dig.Container, error) {
 	container := dig.New()
 	// provide config
 	if err := container.Provide(config.NewConfig); err != nil {
+		log.Warnf("builder container, provider config err: %s", err)
 		return nil, err
 	}
 	// provide timer

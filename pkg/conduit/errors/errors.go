@@ -20,24 +20,40 @@ var (
 	ErrDuplicatedPeerIndexConfigured = errors.New("duplicated peer index configured")
 	ErrPeerIndexNotfound             = errors.New("peer index not found")
 	ErrIllegalClientListenAddress    = errors.New("illegal client listen address")
+
+	ErrNoSuchFileOrDirectory = errors.New("o such file or directory") // "no such file or directory" or "No such file or directory"
 )
 
-func IsErrChainExists(err string) bool {
-	if strings.Contains(err, ErrChainExists.Error()) {
+func IsErrChainExists(err error) bool {
+	if strings.Contains(err.Error(), ErrChainExists.Error()) {
 		return true
 	}
 	return false
 }
 
-func IsErrChainNoMatch(err string) bool {
-	if strings.Contains(err, ErrChainNoMatch.Error()) {
+func IsErrChainNoMatch(err error) bool {
+	if strings.Contains(err.Error(), ErrChainNoMatch.Error()) {
 		return true
 	}
 	return false
 }
 
-func IsErrBadRule(err string) bool {
-	if strings.Contains(err, ErrBadRule.Error()) {
+func IsErrIPSetNoMatch(err error) bool {
+	if strings.Contains(err.Error(), "Set") && strings.Contains(err.Error(), "doesn't exist") {
+		return true
+	}
+	return false
+}
+
+func IsErrBadRule(err error) bool {
+	if strings.Contains(err.Error(), ErrBadRule.Error()) {
+		return true
+	}
+	return false
+}
+
+func IsErrNoSuchFileOrDirectory(err error) bool {
+	if strings.Contains(err.Error(), ErrNoSuchFileOrDirectory.Error()) {
 		return true
 	}
 	return false

@@ -204,7 +204,7 @@ func (client *Client) setStaticPolicies() error {
 }
 
 func (client *Client) proxy() error {
-	listener, err := net.Listen("tcp4", client.conf.Client.Listen)
+	listener, err := net.Listen(client.conf.Client.Network, client.conf.Client.Listen)
 	if err != nil {
 		return err
 	}
