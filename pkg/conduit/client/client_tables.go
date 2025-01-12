@@ -347,7 +347,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip port
@@ -358,7 +358,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip
@@ -369,7 +369,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 

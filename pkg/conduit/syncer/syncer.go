@@ -196,13 +196,13 @@ func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, 
 			log.Infof("syncer conduit online, conduit: %s deleted ips: %v", conduit.MachineID, elem.IPs)
 			// add new ips
 			elem.IPs = conduit.IPs
-			syncer.addResources(elem.IPs)
+			syncer.addResources(conduit.Network, conduit.Addr, elem.IPs)
 			log.Infof("syncer conduit online, conduit: %s add ips: %v success", conduit.MachineID, elem.IPs)
 			return
 		}
 	}
 	// add new conduit
-	syncer.addResources(conduit.IPs)
+	syncer.addResources(conduit.Network, conduit.Addr, conduit.IPs)
 	syncer.cache = append(syncer.cache, proto.Conduit{
 		MachineID: conduit.MachineID,
 		Network:   conduit.Network,
@@ -246,13 +246,13 @@ func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for _, elem := range syncer.cache {
-		if elem.MachineID == request.MachineID {
+	for _, conduit := range syncer.cache {
+		if conduit.MachineID == request.MachineID {
 			// del old ips
-			syncer.delResources(elem.IPs)
+			syncer.delResources(conduit.IPs)
 			// add new ips
-			elem.IPs = request.IPs
-			syncer.addResources(elem.IPs)
+			conduit.IPs = request.IPs
+			syncer.addResources(conduit.Network, conduit.Addr, conduit.IPs)
 			break
 		}
 	}
@@ -345,7 +345,7 @@ func (syncer *syncer) PullCluster() error {
 	}
 	for _, add := range adds {
 		log.Debugf("syncer pull cluster, add conduit: %s, ip: %s", add.MachineID, utils.IPs(add.IPs))
-		syncer.addResources(add.IPs)
+		syncer.addResources(add.Network, add.Addr, add.IPs)
 	}
 	return nil
 }
@@ -377,11 +377,13 @@ func (syncer *syncer) delResources(ips []net.IP) {
 	}
 }
 
-func (syncer *syncer) addResources(ips []net.IP) {
+func (syncer *syncer) addResources(networktype, addr string, ips []net.IP) {
 	for _, ip := range ips {
 		// add policy
 		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
 			PeerDialConfig: &network.DialConfig{
+				Netwotk: networktype,
+				Addrs:   []string{addr},
 				TLS: &network.TLS{
 					Enable:             true,
 					MTLS:               true,

@@ -25,6 +25,7 @@ import (
 	"github.com/moresec-io/conduit/pkg/conduit/proto"
 	"github.com/moresec-io/conduit/pkg/conduit/repo"
 	"github.com/moresec-io/conduit/pkg/conduit/syncer"
+	"github.com/moresec-io/conduit/pkg/conduit/sys"
 	gconfig "github.com/moresec-io/conduit/pkg/config"
 	"github.com/moresec-io/conduit/pkg/network"
 	gproto "github.com/moresec-io/conduit/pkg/proto"
@@ -62,24 +63,48 @@ type Client struct {
 
 	repo   repo.Repo
 	syncer syncer.Syncer
-
-	// forward rules
-	ipportPolicies map[string]*policy
-	portPolicies   map[int]*policy
-	ipPolicies     map[string]*policy
 }
 
-func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Client, error) {
+func NewClient(conf *config.Config, syncer syncer.Syncer, rp repo.Repo) (*Client, error) {
 	client := &Client{
-		conf:           conf,
-		quit:           make(chan struct{}),
-		peers:          make(map[int]*peer),
-		repo:           repo,
-		syncer:         syncer,
-		ipportPolicies: make(map[string]*policy),
-		portPolicies:   make(map[int]*policy),
-		ipPolicies:     make(map[string]*policy),
+		conf:   conf,
+		quit:   make(chan struct{}),
+		peers:  make(map[int]*peer),
+		repo:   rp,
+		syncer: syncer,
 	}
+	// client listen
+	ipPort := strings.Split(conf.Client.Listen, ":")
+	if len(ipPort) != 2 {
+		return nil, ierrors.ErrIllegalClientListenAddress
+	}
+	port, err := strconv.Atoi(ipPort[1])
+	if err != nil {
+		return nil, err
+	}
+	client.port = port
+	// clear legacies
+	client.finiTables(log.LevelDebug, "flush tables before init")
+	client.repo.FiniIPSet(log.LevelDebug, "destroy ipset before init")
+
+	// set
+	err = client.setIPSet()
+	if err != nil {
+		return nil, err
+	}
+	err = client.setTables()
+	if err != nil {
+		return nil, err
+	}
+	err = client.setProc()
+	if err != nil {
+		return nil, err
+	}
+	err = client.setStaticPolicies()
+	if err != nil {
+		return nil, err
+	}
+	// manager
 	if conf.Manager.Enable {
 		_, err := syncer.ReportClient(&gproto.ReportClientRequest{
 			MachineID: conf.MachineID,
@@ -92,16 +117,6 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Clie
 			return nil, err
 		}
 	}
-	// client listen
-	ipPort := strings.Split(conf.Client.Listen, ":")
-	if len(ipPort) != 2 {
-		return nil, ierrors.ErrIllegalClientListenAddress
-	}
-	port, err := strconv.Atoi(ipPort[1])
-	if err != nil {
-		return nil, err
-	}
-	client.port = port
 
 	// peers
 	for _, elem := range conf.Client.Peers {
@@ -141,14 +156,16 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Clie
 		if !ok {
 			return nil, ierrors.ErrPeerIndexNotfound
 		}
-		po := &policy{
-			peerDialConfig: peer.dialConfig,
-			dstTo:          dstTo,
-		}
 		if ipstr == "" {
-			client.portPolicies[port] = po
+			client.repo.AddPortPolicy(port, &repo.Policy{
+				PeerDialConfig: peer.dialConfig,
+				DstTo:          dstTo,
+			})
 		} else {
-			client.ipportPolicies[dst] = po
+			client.repo.AddIPPortPolicy(dst, &repo.Policy{
+				PeerDialConfig: peer.dialConfig,
+				DstTo:          dstTo,
+			})
 		}
 	}
 	return client, nil
@@ -157,27 +174,6 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Clie
 func (client *Client) Work() error {
 	// set up proxy
 	err := client.proxy()
-	if err != nil {
-		return err
-	}
-	// clear legacies
-	client.finiTables(log.LevelDebug, "flush tables before init")
-	client.repo.FiniIPSet(log.LevelDebug, "destroy ipset before init")
-
-	// set
-	err = client.setIPSet()
-	if err != nil {
-		return err
-	}
-	err = client.setTables()
-	if err != nil {
-		return err
-	}
-	err = client.setProc()
-	if err != nil {
-		return err
-	}
-	err = client.setStaticPolicies()
 	if err != nil {
 		return err
 	}
@@ -243,8 +239,8 @@ type ctx struct {
 	dstPort int    // real dst port
 	dst     string // real dst in string
 	// mark    uint32
-	dial  *policy // proxy
-	dstTo string  // dst after proxy
+	dial  *repo.Policy // proxy
+	dstTo string       // dst after proxy
 }
 
 const (
@@ -362,49 +358,52 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 	}
 
 	mark := meta[1].(uint32)
-	var policy *policy
-	var ok bool
+	var policy *repo.Policy
 	switch mark {
 	case uint32(config.MarkIpsetIP):
 		// manager policy
-		policy, ok = client.ipPolicies[ctx.dstIP]
-		if !ok {
+		policy = client.repo.GetPolicyByIP(ctx.dstIP)
+		if policy == nil {
+			log.Errorf("client tproxy post accept, ip: %s policy not found", ctx.dstIP)
 			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	case uint32(config.MarkIpsetIPPort):
-		policy, ok = client.ipportPolicies[ctx.dst]
-		if !ok {
+		policy = client.repo.GetPolicyByIPPort(ctx.dst)
+		if policy == nil {
+			log.Errorf("client tproxy post accept, ipport: %s policy not found", ctx.dst)
 			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	case uint32(config.MarkIpsetPort):
-		policy, ok = client.portPolicies[ctx.dstPort]
-		if !ok {
+		policy = client.repo.GetPolicyByPort(ctx.dstPort)
+		if policy == nil {
+			log.Errorf("client tproxy post accept, dstport: %v policy not found", ctx.dstPort)
 			return nil, errors.New("policy not found")
 		}
 		ctx.dial = policy
 	default:
 		// failed to get mask, maybe fwmark_accept not enabled, we must iterate policies
-		policy, ok = client.ipPolicies[ctx.dstIP]
-		if ok {
+		policy = client.repo.GetPolicyByIPPort(ctx.dst)
+		if policy != nil {
 			ctx.dial = policy
 			break
 		}
-		policy, ok = client.ipportPolicies[ctx.dst]
-		if ok {
+		policy = client.repo.GetPolicyByPort(ctx.dstPort)
+		if policy != nil {
 			ctx.dial = policy
 			break
 		}
-		policy, ok = client.portPolicies[ctx.dstPort]
-		if ok {
+		policy = client.repo.GetPolicyByIP(ctx.dstIP)
+		if policy != nil {
 			ctx.dial = policy
 			break
 		}
+		log.Errorf("client tproxy post accept, ip: %s, ipport: %s, dstport: %v policy not found", ctx.dstIP, ctx.dst, ctx.dstPort)
 		return nil, errors.New("policy not found")
 	}
-	if policy.dstTo != "" {
-		ctx.dstTo = policy.dstTo
+	if policy.DstTo != "" {
+		ctx.dstTo = policy.DstTo
 	}
 	return ctx, nil
 }
@@ -415,7 +414,9 @@ func (client *Client) tproxyPreDial(custom interface{}) error {
 
 func (client *Client) tproxyDial(dst net.Addr, custom interface{}) (net.Conn, error) {
 	ctx := custom.(*ctx)
-	return network.DialRandomWithConfig(ctx.dial.peerDialConfig)
+	config := ctx.dial.PeerDialConfig
+	config.Control = sys.Control
+	return network.DialRandomWithConfig(ctx.dial.PeerDialConfig)
 }
 
 func (client *Client) tproxyPostDial(custom interface{}) error {
