@@ -53,6 +53,10 @@ func NewServer(conf *config.Config, syncer syncer.Syncer) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
+		err = syncer.ReportNetworks()
+		if err != nil {
+			return nil, err
+		}
 		tls = response.TLS
 	}
 	server := &Server{

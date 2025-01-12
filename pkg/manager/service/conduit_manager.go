@@ -362,6 +362,9 @@ func (cm *ConduitManager) ReportNetworks(_ context.Context, req geminio.Request,
 		cm.mtx.RUnlock()
 		return
 	}
+	if conduit.GetServerConfig() == nil {
+		return
+	}
 	// compare
 	if utils.CompareNets(request.IPs, conduit.GetServerConfig().IPs) {
 		// nothing changed
@@ -389,7 +392,7 @@ func (cm *ConduitManager) PullCluster(_ context.Context, req geminio.Request, rs
 	cm.mtx.RLock()
 	conduits := []proto.Conduit{}
 	for _, conduit := range cm.conduits {
-		if conduit.IsServer() {
+		if conduit.IsServer() && request.MachineID != conduit.MachineID() {
 			conduits = append(conduits, proto.Conduit{
 				MachineID: conduit.MachineID(),
 				Network:   conduit.GetServerConfig().Network,
@@ -447,6 +450,10 @@ func (cm *ConduitManager) GetClientID(uint64, []byte) (uint64, error) {
 }
 
 func (cm *ConduitManager) Close() {
+	log.Infof(`
+==================================================
+                MANAGER ENDS
+==================================================`)
 	cm.mtx.Lock()
 	defer cm.mtx.Unlock()
 

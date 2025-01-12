@@ -74,7 +74,6 @@ type Config struct {
 
 func NewConfig() (*Config, error) {
 	time.LoadLocation("Asia/Shanghai")
-
 	err := initCmd()
 	if err != nil {
 		log.Warnf("new config, init cmd err: %s", err)
@@ -90,6 +89,11 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Infof(`
+==================================================
+                MANAGER STARTS
+==================================================`)
+
 	return Conf, err
 }
 

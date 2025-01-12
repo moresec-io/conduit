@@ -88,6 +88,10 @@ type Config struct {
 
 func Init() error {
 	time.LoadLocation("Asia/Shanghai")
+	log.Infof(`
+==================================================
+                MANAGER STARTS
+==================================================`)
 
 	err := initCmd()
 	if err != nil {

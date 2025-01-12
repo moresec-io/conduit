@@ -87,6 +87,10 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, repo repo.Repo) (*Clie
 		if err != nil {
 			return nil, err
 		}
+		err = syncer.PullCluster()
+		if err != nil {
+			return nil, err
+		}
 	}
 	// client listen
 	ipPort := strings.Split(conf.Client.Listen, ":")
