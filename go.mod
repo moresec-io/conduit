@@ -2,7 +2,7 @@ module github.com/moresec-io/conduit
 
 go 1.19
 
-replace github.com/singchia/geminio => ../geminio
+replace github.com/jumboframes/armorigo => ../armorigo
 
 require (
 	github.com/denisbrodbeck/machineid v1.0.1

@@ -29,10 +29,6 @@ func (client *Client) setProc() error {
 				if err != nil {
 					log.Errorf("client set proc, init proc err: %s", err)
 				}
-				err = client.iniSysctl()
-				if err != nil {
-					log.Errorf("client set proc, init sysctl err: %s", err)
-				}
 			case <-client.quit:
 				return
 			}

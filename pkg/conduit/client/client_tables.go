@@ -141,7 +141,7 @@ func (client *Client) initTables() error {
 		MatchSet(iptables.WithMatchSetName(false, ConduitIPSetIP, iptables.FlagDst)).OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).
 		Check()
-	if err != nil {
+	if err != nil && !errors.IsErrChainNoMatch(err) {
 		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
@@ -166,7 +166,7 @@ func (client *Client) initTables() error {
 		OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).
 		Check()
-	if err != nil {
+	if err != nil && !errors.IsErrChainNoMatch(err) {
 		log.Errorf("client init tables, check mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
@@ -191,7 +191,7 @@ func (client *Client) initTables() error {
 		OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).
 		Check()
-	if err != nil {
+	if err != nil && !errors.IsErrChainNoMatch(err) {
 		log.Errorf("client init tables, check ipport target mark err: %s", strings.TrimSuffix(err.Error(), "\n"))
 		return err
 	}
@@ -314,7 +314,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIP)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete ip ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// delete port mark
@@ -325,7 +325,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetPort)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete port ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	err = ipt.Table(iptables.TableTypeNat).
@@ -335,7 +335,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetMark(iptables.WithTargetMarkSet(config.MarkIpsetIPPort)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete ipport ipset mark err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// delete dnats
@@ -347,7 +347,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip port
@@ -358,7 +358,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 	// dnat ip
@@ -369,7 +369,7 @@ func (client *Client) finiTables(level log.Level, prefix string) {
 		OptionWait(0).
 		TargetDNAT(iptables.WithTargetDNATToAddr(network.ParseIP("127.0.0.1"), client.port)).
 		Delete()
-	if err != nil && !errors.IsErrIPSetNoMatch(err) {
+	if err != nil && !errors.IsErrIPSetNoMatch(err) && !errors.IsErrChainNoMatch(err) {
 		log.Printf(level, "%s, delete dnat err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
 	}
 

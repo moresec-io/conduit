@@ -4,12 +4,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"os"
+	"syscall"
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
+	"github.com/moresec-io/conduit/pkg/utils"
 )
 
 func DialRandom(dial *config.Dial) (net.Conn, error) {
@@ -29,6 +32,7 @@ type DialConfig struct {
 	Netwotk string
 	Addrs   []string
 	TLS     *TLS
+	Control func(network string, address string, c syscall.RawConn) error
 }
 
 func DialRandomWithConfig(dialconfig *DialConfig) (net.Conn, error) {
@@ -51,33 +55,49 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 	}
 
 	if dialconfig.TLS == nil || !dialconfig.TLS.Enable {
-		conn, err := net.Dial(network, addr)
+		dialer := &net.Dialer{
+			Control: dialconfig.Control,
+		}
+		conn, err := dialer.Dial(network, addr)
 		if err != nil {
 			return nil, err
 		}
 		return conn, err
 	} else {
 		if !dialconfig.TLS.MTLS {
-			conn, err := tls.Dial(network, addr, &tls.Config{
-				Certificates: dialconfig.TLS.Certs,
-				// it's user's call to verify the server certs or not.
-				InsecureSkipVerify: dialconfig.TLS.InsecureSkipVerify,
-				RootCAs:            dialconfig.TLS.CAPool,
-			})
+			tlsDialer := &tls.Dialer{
+				NetDialer: &net.Dialer{
+					Control: dialconfig.Control,
+				},
+				Config: &tls.Config{
+					Certificates: dialconfig.TLS.Certs,
+					// it's user's call to verify the server certs or not.
+					InsecureSkipVerify: dialconfig.TLS.InsecureSkipVerify,
+					RootCAs:            dialconfig.TLS.CAPool,
+				},
+			}
+			conn, err := tlsDialer.Dial(network, addr)
 			if err != nil {
 				log.Errorf("tls dial err: %s, network: %s, addr: %s", err, network, addr)
 				return nil, err
 			}
 			return conn, nil
 		} else {
-			conn, err := tls.Dial(network, addr, &tls.Config{
-				Certificates: dialconfig.TLS.Certs,
-				// it's user's call to verify the server certs or not.
-				InsecureSkipVerify: dialconfig.TLS.InsecureSkipVerify,
-				RootCAs:            dialconfig.TLS.CAPool,
-			})
+			fmt.Printf("Certificate %s\n", utils.TLSCertToPEM(&dialconfig.TLS.Certs[0]))
+			tlsDialer := &tls.Dialer{
+				NetDialer: &net.Dialer{
+					Control: dialconfig.Control,
+				},
+				Config: &tls.Config{
+					Certificates: dialconfig.TLS.Certs,
+					// it's user's call to verify the server certs or not.
+					InsecureSkipVerify: dialconfig.TLS.InsecureSkipVerify,
+					RootCAs:            dialconfig.TLS.CAPool,
+				},
+			}
+			conn, err := tlsDialer.Dial(network, addr)
 			if err != nil {
-				log.Errorf("dial tls dial err: %s, network: %s, addr: %s", err, network, addr)
+				log.Errorf("tls dial err: %s, network: %s, addr: %s", err, network, addr)
 				return nil, err
 			}
 			return conn, nil

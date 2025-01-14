@@ -27,6 +27,8 @@ const (
 type Syncer interface {
 	ReportServer(request *proto.ReportServerRequest) (*proto.ReportServerResponse, error)
 	ReportClient(request *proto.ReportClientRequest) (*proto.ReportClientResponse, error)
+	ReportNetworks() error
+	PullCluster() error
 }
 
 func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (Syncer, error) {
@@ -36,6 +38,7 @@ func NewSyncer(conf *config.Config, repo repo.Repo, syncMode int) (Syncer, error
 type syncer struct {
 	machineid string
 	end       geminio.End
+	syncMode  int
 
 	repo repo.Repo
 
@@ -51,6 +54,7 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 		machineid: conf.MachineID,
 		cache:     []proto.Conduit{},
 		repo:      repo,
+		syncMode:  syncMode,
 	}
 
 	// connect to manager
@@ -85,7 +89,7 @@ func newsyncer(conf *config.Config, repo repo.Repo, syncMode int) (*syncer, erro
 		}
 	}
 
-	go syncer.sync(syncMode)
+	go syncer.sync()
 	return syncer, nil
 }
 
@@ -192,13 +196,13 @@ func (syncer *syncer) syncConduitOnline(_ context.Context, req geminio.Request, 
 			log.Infof("syncer conduit online, conduit: %s deleted ips: %v", conduit.MachineID, elem.IPs)
 			// add new ips
 			elem.IPs = conduit.IPs
-			syncer.addResources(elem.IPs)
+			syncer.addResources(conduit.Network, conduit.Addr, elem.IPs)
 			log.Infof("syncer conduit online, conduit: %s add ips: %v success", conduit.MachineID, elem.IPs)
 			return
 		}
 	}
 	// add new conduit
-	syncer.addResources(conduit.IPs)
+	syncer.addResources(conduit.Network, conduit.Addr, conduit.IPs)
 	syncer.cache = append(syncer.cache, proto.Conduit{
 		MachineID: conduit.MachineID,
 		Network:   conduit.Network,
@@ -242,41 +246,43 @@ func (syncer *syncer) syncConduitNetworksChanged(_ context.Context, req geminio.
 	syncer.mtx.Lock()
 	defer syncer.mtx.Unlock()
 
-	for _, elem := range syncer.cache {
-		if elem.MachineID == request.MachineID {
+	for _, conduit := range syncer.cache {
+		if conduit.MachineID == request.MachineID {
 			// del old ips
-			syncer.delResources(elem.IPs)
+			syncer.delResources(conduit.IPs)
 			// add new ips
-			elem.IPs = request.IPs
-			syncer.addResources(elem.IPs)
+			conduit.IPs = request.IPs
+			syncer.addResources(conduit.Network, conduit.Addr, conduit.IPs)
 			break
 		}
 	}
 }
 
-func (syncer *syncer) sync(syncMode int) {
+func (syncer *syncer) sync() {
 	ticker := time.NewTicker(60 * time.Second)
 	for {
 		<-ticker.C
-		if syncMode&SyncModeUp != 0 {
-			err := syncer.reportNetworks()
-			if err != nil {
-				log.Errorf("syncer sync, report agent err: %s", err)
-				continue
-			}
+		syncer.syncOnce()
+	}
+}
+
+func (syncer *syncer) syncOnce() {
+	if syncer.syncMode&SyncModeUp != 0 {
+		err := syncer.ReportNetworks()
+		if err != nil {
+			log.Errorf("syncer sync, report agent err: %s", err)
 		}
-		if syncMode&SyncModeDown != 0 {
-			err := syncer.pullCluster()
-			if err != nil {
-				log.Errorf("syncer sync, pull cluster err: %s", err)
-				continue
-			}
+	}
+	if syncer.syncMode&SyncModeDown != 0 {
+		err := syncer.PullCluster()
+		if err != nil {
+			log.Errorf("syncer sync, pull cluster err: %s", err)
 		}
 	}
 }
 
 // server report local networks to manager
-func (syncer *syncer) reportNetworks() error {
+func (syncer *syncer) ReportNetworks() error {
 	// conduit network
 	// currently we ignore networks
 	networks, err := network.ListIPs()
@@ -303,7 +309,7 @@ func (syncer *syncer) reportNetworks() error {
 }
 
 // client pull cluster
-func (syncer *syncer) pullCluster() error {
+func (syncer *syncer) PullCluster() error {
 	request := &proto.PullClusterRequest{
 		MachineID: syncer.machineid,
 	}
@@ -339,7 +345,7 @@ func (syncer *syncer) pullCluster() error {
 	}
 	for _, add := range adds {
 		log.Debugf("syncer pull cluster, add conduit: %s, ip: %s", add.MachineID, utils.IPs(add.IPs))
-		syncer.addResources(add.IPs)
+		syncer.addResources(add.Network, add.Addr, add.IPs)
 	}
 	return nil
 }
@@ -371,11 +377,13 @@ func (syncer *syncer) delResources(ips []net.IP) {
 	}
 }
 
-func (syncer *syncer) addResources(ips []net.IP) {
+func (syncer *syncer) addResources(networktype, addr string, ips []net.IP) {
 	for _, ip := range ips {
 		// add policy
 		syncer.repo.AddIPPolicy(ip.String(), &repo.Policy{
 			PeerDialConfig: &network.DialConfig{
+				Netwotk: networktype,
+				Addrs:   []string{addr},
 				TLS: &network.TLS{
 					Enable:             true,
 					MTLS:               true,
