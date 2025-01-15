@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 )
 
@@ -16,4 +17,12 @@ func TLSCertToPEM(cert *tls.Certificate) string {
 		chain += str + "\n"
 	}
 	return chain
+}
+
+func X509CertoToPem(cert *x509.Certificate) string {
+	block := &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}
+	return string(pem.EncodeToMemory(block))
 }
