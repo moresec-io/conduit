@@ -19,7 +19,7 @@ client:
   server_port: 5053
   policies:
     - dst: :80 # all traffic to :5201 will be forwared by proxy 172.168.0.16:5053 to 127.0.0.1:5201
-      dst_to: 127.0.0.1:80``
+      dst_to: 127.0.0.1:80
       proxy:
         network: tcp
         addrs:
