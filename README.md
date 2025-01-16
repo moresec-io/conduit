@@ -3,7 +3,9 @@
 </p>
 
 <div align="center">
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 </div>
 
 Conduit是一个透明代理Mesh，为你的ToB集群间安全保驾护航。
