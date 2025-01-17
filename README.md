@@ -24,7 +24,7 @@ Conduit是一个透明代理Mesh，为你的ToB集群间安全保驾护航。
 ![](./docs/diagrams/client-server.jpg)
 
 
-配置做为客户端：
+Host A配置做为客户端：
 
 **conduit.yaml**
 
@@ -50,7 +50,7 @@ log:
   file: /opt/conduit/log/conduit.log
 ```
 
-配置做为服务端
+Host B配置做为服务端
 **conduit.yaml**
 
 ```yaml
@@ -146,7 +146,6 @@ log:
 
 ```bash
 /opt/conduit/bin/manager -c /opt/conduit/conf/manager.yaml
-
 ```
 
 在Host A B C D部署Conduit：
@@ -159,9 +158,24 @@ log:
 配置集群成为一个A B C D互相访问都走mTLS通道的透明代理Mesh。
 
 
+## 获取
+
+```
+make conduit
+```
+
+得到release/bin/conduit
+
+```
+make manager
+```
+
+得到release/bin/manager
+
+
 ## Q&A
 
-1. Conduit会影响我的iptables表吗
+### Conduit会影响我的iptables表吗
 
 Conduit独立建立了CONDUIT Chain，只有命中了ipset的才会进入透明代理。并且在正常退出后，会清除所有规则。
 
@@ -177,7 +191,7 @@ Conduit独立建立了CONDUIT Chain，只有命中了ipset的才会进入透明�
 -A CONDUIT -p tcp -m set --match-set CONDUIT_IP dst -j DNAT --to-destination 127.0.0.1:5052
 ```
 
-2. 性能怎么样
+### 性能怎么样
 
 使用iperf可以打满带宽
 
@@ -201,19 +215,22 @@ Accepted connection from 127.0.0.1, port 47363
 ...
 ```
 
-3. 适用于什么场景
+### 适用于什么场景
 
 * ToB交付产品时，经常需要暴露mysql/redis端口，但是历史原因没有配置tls，可以使用Conduit来接管安全
 * 没有微隔离，但是需要把几台主机流量隔离起来，可以使用Conduit来构成Mesh网络
 * 不希望对外端口开放过多，可以使用Conduit做为代理使用
 
-4. 为什么会给流量打Mark
+### 为什么会给流量打Mark
 
 为了防止Conduit发出的流量又被iptables劫持，所以使用Mark来忽略。
 
-5. 我需要开通fw_mark吗
+### 我需要开通fw_mark吗
 
 fw_mark是为了iptables的mark在socket接收时能够查到这个mark，以快速确定匹配了哪个ipset，如果没有也没关系，会多一层判断
 
+### 配置了Mesh还能额外配置forward_table吗
+
+可以，Mesh的流量会走CONDUIT_IP的ipset，forward_table配置是CONDUIT_IP或CONDUIT_IPPORT的ipset，而且优先级更高
 
 Released under the [Apache License 2.0](https://github.com/moresec-io/conduit/blob/main/LICENSE)

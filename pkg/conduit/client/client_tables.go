@@ -7,6 +7,7 @@
 package client
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,49 @@ func (client *Client) setTables() error {
 
 func (client *Client) initTables() error {
 	ipt := iptables.NewIPTables()
+
+	// ignore manager connection
+	if client.conf.Manager.Enable {
+		for _, address := range client.conf.Manager.Dial.Addresses {
+			ipport := strings.Split(address, ":")
+			if len(ipport) != 2 {
+				continue
+			}
+			port, err := strconv.Atoi(ipport[1])
+			if err != nil {
+				continue
+			}
+			exist, err := ipt.Table(iptables.TableTypeNat).
+				Chain(iptables.ChainTypeOUTPUT).
+				MatchIPv4().
+				MatchProtocol(false, network.ProtocolTCP).
+				MatchDestination(false, ipport[0]).
+				MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).
+				TargetAccept().
+				Check()
+			if err != nil {
+				log.Errorf("client init tables, check manager addr err: %s", strings.TrimSuffix(err.Error(), "\n"))
+				return err
+			}
+			if !exist {
+				err = ipt.Table(iptables.TableTypeNat).
+					Chain(iptables.ChainTypeOUTPUT).
+					MatchIPv4().
+					MatchProtocol(false, network.ProtocolTCP).
+					MatchDestination(false, ipport[0]).
+					MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+					OptionWait(0).
+					TargetAccept().
+					Insert()
+				if err != nil {
+					log.Errorf("client init tables, insert manager addr err: %s", strings.TrimSuffix(err.Error(), "\n"))
+					return err
+				}
+			}
+		}
+	}
+
 	// ignore ourself connection by setting mark
 	exist, err := ipt.Table(iptables.TableTypeNat).
 		Chain(iptables.ChainTypeOUTPUT).
@@ -290,6 +334,33 @@ func (client *Client) initTables() error {
 
 func (client *Client) finiTables(level log.Level, prefix string) {
 	ipt := iptables.NewIPTables()
+
+	// delete ignore manager connection
+	if client.conf.Manager.Enable {
+		for _, address := range client.conf.Manager.Dial.Addresses {
+			ipport := strings.Split(address, ":")
+			if len(ipport) != 2 {
+				continue
+			}
+			port, err := strconv.Atoi(ipport[1])
+			if err != nil {
+				continue
+			}
+			err = ipt.Table(iptables.TableTypeNat).
+				Chain(iptables.ChainTypeOUTPUT).
+				MatchIPv4().
+				MatchProtocol(false, network.ProtocolTCP).
+				MatchDestination(false, ipport[0]).
+				MatchTCP(iptables.WithMatchTCPDstPort(false, port)).
+				OptionWait(0).
+				TargetAccept().
+				Delete()
+			if err != nil {
+				log.Printf(level, "%s, delete manager addr err: %s", prefix, strings.TrimSuffix(err.Error(), "\n"))
+			}
+		}
+	}
+
 	// delete the mark
 	err := ipt.Table(iptables.TableTypeNat).
 		Chain(iptables.ChainTypeOUTPUT).
