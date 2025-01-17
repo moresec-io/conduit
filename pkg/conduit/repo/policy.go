@@ -8,7 +8,7 @@ import (
 
 type Policy struct {
 	PeerDialConfig *network.DialConfig // dial using our tls
-	DstTo          string
+	DstAs          string
 }
 
 type cache struct {

@@ -48,7 +48,7 @@ type peer struct {
 
 type policy struct {
 	peerDialConfig *network.DialConfig
-	dstTo          string
+	dstAs          string
 }
 
 type Client struct {
@@ -141,13 +141,17 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, rp repo.Repo) (*Client
 
 	// static forward match
 	for _, elem := range conf.Client.ForwardTable {
-		dst, dstTo := elem.Dst, elem.DstTo
-		ipport := strings.Split(dst, ":")
-		if len(ipport) != 2 {
+		dst, dstAs := elem.Dst, elem.DstAs
+		dstIPPort := strings.Split(dst, ":")
+		if len(dstIPPort) != 2 {
 			return nil, errors.New("illegal policy")
 		}
-		ipstr := ipport[0]
-		portstr := ipport[1]
+		dstAsIPPort := strings.Split(dstAs, ":")
+		if len(dstAsIPPort) != 2 {
+			return nil, errors.New("illegal policy")
+		}
+		ipstr := dstIPPort[0]
+		portstr := dstIPPort[1]
 		port, err := strconv.Atoi(portstr)
 		if err != nil {
 			return nil, err
@@ -159,12 +163,12 @@ func NewClient(conf *config.Config, syncer syncer.Syncer, rp repo.Repo) (*Client
 		if ipstr == "" {
 			client.repo.AddPortPolicy(port, &repo.Policy{
 				PeerDialConfig: peer.dialConfig,
-				DstTo:          dstTo,
+				DstAs:          dstAs,
 			})
 		} else {
 			client.repo.AddIPPortPolicy(dst, &repo.Policy{
 				PeerDialConfig: peer.dialConfig,
-				DstTo:          dstTo,
+				DstAs:          dstAs,
 			})
 		}
 	}
@@ -240,7 +244,7 @@ type ctx struct {
 	dst     string // real dst in string
 	// mark    uint32
 	dial  *repo.Policy // proxy
-	dstTo string       // dst after proxy
+	dstAs string       // dst after proxy
 }
 
 const (
@@ -354,7 +358,7 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 		dstIP:   dstIp,
 		dstPort: dstPort,
 		dst:     dst.String(),
-		dstTo:   dstIp + ":" + strconv.Itoa(dstPort),
+		dstAs:   dstIp + ":" + strconv.Itoa(dstPort),
 	}
 
 	mark := meta[1].(uint32)
@@ -402,8 +406,8 @@ func (client *Client) tproxyPostAccept(src, dst net.Addr, meta ...interface{}) (
 		log.Errorf("client tproxy post accept, ip: %s, ipport: %s, dstport: %v policy not found", ctx.dstIP, ctx.dst, ctx.dstPort)
 		return nil, errors.New("policy not found")
 	}
-	if policy.DstTo != "" {
-		ctx.dstTo = policy.DstTo
+	if policy.DstAs != "" {
+		ctx.dstAs = policy.DstAs
 	}
 	return ctx, nil
 }
@@ -430,7 +434,7 @@ func (client *Client) tproxyPreWrite(writer io.Writer, custom interface{}) error
 		SrcPort: ctx.srcPort,
 		DstIP:   ctx.dstIP,
 		DstPort: ctx.dstPort,
-		DstTo:   ctx.dstTo,
+		DstAs:   ctx.dstAs,
 	}
 	data, err := json.Marshal(proto)
 	if err != nil {
