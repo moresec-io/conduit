@@ -116,9 +116,9 @@ func (server *Server) replaceDstfunc(conn net.Conn, meta ...interface{}) (net.Ad
 		log.Errorf("server replace dst func, json unmarshal err: %s", err)
 		return nil, nil, err
 	}
-	log.Debugf("server replace dst func, accept src: %s, dst: %s, to: %s",
-		conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.DstTo)
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.DstTo)
+	log.Debugf("server replace dst func, accept src: %s, dst: %s, as: %s",
+		conn.RemoteAddr().String(), conn.LocalAddr().String(), proto.DstAs)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", proto.DstAs)
 	if err != nil {
 		conn.Close()
 		log.Errorf("server replace dst func, net resolve err: %s", err)

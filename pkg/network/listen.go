@@ -30,7 +30,7 @@ func Listen(listen *config.Listen) (net.Listener, error) {
 		err     error
 	)
 
-	if !listen.TLS.Enable {
+	if listen.TLS == nil || !listen.TLS.Enable {
 		if ln, err = net.Listen(network, addr); err != nil {
 			klog.Errorf("listen err: %s, network: %s, addr: %s", err, network, addr)
 			return nil, err

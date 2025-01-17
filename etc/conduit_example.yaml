@@ -17,34 +17,18 @@ client:
   listen: 127.0.0.1:5052
   check_time: 60
   server_port: 5053
-  policies:
-    - dst: :80 # all traffic to :5201 will be forwared by proxy 172.168.0.16:5053 to 127.0.0.1:5201
-      dst_to: 127.0.0.1:80
-      proxy:
-        network: tcp
-        addrs:
-          - 172.168.0.16:5053
-        tls:
-          enable: true
-          mtls: true
-          cas:
-            - ./cert/ca/ca.crt
-          certs:
-            - cert: ./cert/client/client.crt
-              key: ./cert/client/client.key
-          insecure_skip_verify: true
-
-  default_proxy: # if policy has not specified proxy, then the default_proxy will be used
-    network: tcp
-    server_port: 5053
-    tls:
-      enable: true
-      mtls: true
-      cas:
-        - ./cert/ca/ca.crt
-      certs:
-        - cert: ./cert/client/client.crt
-          key: ./cert/client/client.key
+  forward_table:
+    - dst: :80 # all traffic to :80 will be forwared by proxy 172.168.0.11:5053 to 127.0.0.1:80
+      dst_as: 127.0.0.1:80
+      peer_index: 1
+  peers:
+    - index: 1
+      network: tcp
+      addresses:
+        - 172.168.0.11:5053
+      tls:
+        enable: true
+        insecure_skip_verify: true
 
 log:
   maxsize: 10

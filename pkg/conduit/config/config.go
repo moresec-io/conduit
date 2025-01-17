@@ -44,7 +44,7 @@ type Manager struct {
 type ForwardElem struct {
 	Dst       string `yaml:"dst"` // :9092 or 192.168.0.2:9092
 	PeerIndex int    `yaml:"peer_index"`
-	DstTo     string `yaml:"dst_to"`
+	DstAs     string `yaml:"dst_as"`
 }
 
 type Peer struct {

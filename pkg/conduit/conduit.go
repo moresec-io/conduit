@@ -65,6 +65,7 @@ func NewConduit() (*Conduit, error) {
 			log.Errorf("conduit new client err: %s", err)
 			return nil, err
 		}
+		log.Infof("conduit new client success, addr: %s", config.Conf.Client.Listen)
 	}
 	if srvenable {
 		srv, err = server.NewServer(config.Conf, syn)
@@ -72,6 +73,7 @@ func NewConduit() (*Conduit, error) {
 			log.Errorf("conduit new server err: %s", err)
 			return nil, err
 		}
+		log.Infof("conduit new server success, addr: %s", config.Conf.Server.Listen.Addr)
 	}
 	return &Conduit{
 		conf:   config.Conf,
