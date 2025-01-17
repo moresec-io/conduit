@@ -175,7 +175,7 @@ make manager
 
 ## Q&A
 
-### Conduit会影响我的iptables表吗
+**1. Conduit会影响我的iptables表吗**
 
 Conduit独立建立了CONDUIT Chain，只有命中了ipset的才会进入透明代理。并且在正常退出后，会清除所有规则。
 
@@ -191,7 +191,7 @@ Conduit独立建立了CONDUIT Chain，只有命中了ipset的才会进入透明�
 -A CONDUIT -p tcp -m set --match-set CONDUIT_IP dst -j DNAT --to-destination 127.0.0.1:5052
 ```
 
-### 性能怎么样
+**2. 性能怎么样**
 
 使用iperf可以打满带宽
 
@@ -215,22 +215,35 @@ Accepted connection from 127.0.0.1, port 47363
 ...
 ```
 
-### 适用于什么场景
+**3. 适用于什么场景**
 
 * ToB交付产品时，经常需要暴露mysql/redis端口，但是历史原因没有配置tls，可以使用Conduit来接管安全
 * 没有微隔离，但是需要把几台主机流量隔离起来，可以使用Conduit来构成Mesh网络
 * 不希望对外端口开放过多，可以使用Conduit做为代理使用
 
-### 为什么会给流量打Mark
+**4. 为什么会给流量打Mark**
 
 为了防止Conduit发出的流量又被iptables劫持，所以使用Mark来忽略。
 
-### 我需要开通fw_mark吗
+**5. 我需要开通fw_mark吗**
 
 fw_mark是为了iptables的mark在socket接收时能够查到这个mark，以快速确定匹配了哪个ipset，如果没有也没关系，会多一层判断
 
-### 配置了Mesh还能额外配置forward_table吗
+**6. 配置了Mesh还能额外配置forward_table吗**
 
 可以，Mesh的流量会走CONDUIT_IP的ipset，forward_table配置是CONDUIT_IP或CONDUIT_IPPORT的ipset，而且优先级更高
+
+### 贡献
+
+如果你发现任何Bug，请提出Issue，项目Maintainers会及时响应相关问题。
+ 
+ 如果你希望能够提交Feature，更快速解决项目问题，满足以下简单条件下欢迎提交PR：
+ 
+ * 代码风格保持一致
+ * 每次提交一个Feature
+ * 提交的代码都携带单元测试
+
+
+## 许可证
 
 Released under the [Apache License 2.0](https://github.com/moresec-io/conduit/blob/main/LICENSE)
