@@ -2,8 +2,6 @@ module github.com/moresec-io/conduit
 
 go 1.19
 
-replace github.com/jumboframes/armorigo => ../armorigo
-
 require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/go-sql-driver/mysql v1.8.1
