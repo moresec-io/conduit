@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"time"
@@ -65,7 +64,6 @@ func NewServer(conf *config.Config, syncer syncer.Syncer) (*Server, error) {
 		syncer: syncer,
 	}
 	if tls != nil {
-		fmt.Println(string(tls.CA), string(tls.Cert), "singchia watching")
 		server.listener, err = network.ListenDERMTLS(conf.Server.Network, conf.Server.Addr, tls.CA, tls.Cert, tls.Key)
 	} else {
 		server.listener, err = network.Listen(&conf.Server.Listen)
@@ -97,7 +95,6 @@ func (server *Server) proxy() error {
 }
 
 func (server *Server) replaceDstfunc(conn net.Conn, meta ...interface{}) (net.Addr, net.Conn, error) {
-	fmt.Println("singchia watching", conn.RemoteAddr(), conn.LocalAddr())
 	bs := make([]byte, 4)
 	_, err := io.ReadFull(conn, bs)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"math/rand"
 	"net"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/jumboframes/armorigo/log"
 	"github.com/moresec-io/conduit/pkg/config"
-	"github.com/moresec-io/conduit/pkg/utils"
 )
 
 func DialRandom(dial *config.Dial) (net.Conn, error) {
@@ -83,7 +81,6 @@ func DialWithConfig(dialconfig *DialConfig, index int) (net.Conn, error) {
 			}
 			return conn, nil
 		} else {
-			fmt.Printf("Certificate %s\n", utils.TLSCertToPEM(&dialconfig.TLS.Certs[0]))
 			tlsDialer := &tls.Dialer{
 				NetDialer: &net.Dialer{
 					Control: dialconfig.Control,
