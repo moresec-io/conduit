@@ -4,6 +4,8 @@
 
 <div align="center">
 
+[![Go](https://github.com/moresec-io/conduit/actions/workflows/go.yml/badge.svg)](https://github.com/moresec-io/conduit/actions/workflows/go.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/moresec-io/conduit)](https://goreportcard.com/report/github.com/moresec-io/conduit)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 </div>
