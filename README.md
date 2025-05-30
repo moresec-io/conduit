@@ -27,6 +27,13 @@ Conduit是一个透明代理和Mesh代理，劫持并加密你的流量，无需
 * Client/Server模式
 * Mesh模式
 
+<span style="display: inline-block; width: 49%;">
+  ![Client-Server模式](./docs/diagrams/client-server.jpg)
+</span>
+<span style="display: inline-block; width: 49%;">
+  ![Mesh模式](./docs/diagrams/conduit.jpg)
+</span>
+
 ### 1. Client-Server模式
 
 所有在```Host A```访问```:80```端口都会经过```Host B(172.168.0.11:5053)```访问到```127.0.0.1:80```:
