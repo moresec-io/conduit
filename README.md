@@ -10,18 +10,31 @@
 
 </div>
 
-Conduit是一个透明代理Mesh，为你的ToB集群间安全保驾护航。
+Conduit是一个透明代理和Mesh代理，劫持并加密你的流量，无需任何软件开发和改造成本，几分钟即可部署完成使用，为你的集群间通信保驾护航。如果你面临：集群间通信未考虑加密、网络中数据泄漏并被检测、使用未配置TLS的MySQL/PostgreSQL、被中间人攻击，Conduit就是你的天命之选！
 
 ## 特性
 
-- **集群安全** 支持TLS和mTLS
+- **无需编码/改造** 没有任何代码改造成本，分钟级部署和交付
+- **部署简单** 配置易理解，一行命令启动，点到点代理和加密
+- **集群安全** 支持TLS和mTLS，更安全，更防中间人
 - **性能无损** 使用Netfilter提供的透明代理，几乎无性能损耗
-- **全场景代理** 支持简单Client/Server代理，也支持透明代理Mesh
+- **全场景代理** 支持简单N:1的Client/Server代理，也支持N:M的透明代理Mesh
+- **中心化管理** 支持全局控制面，随时加入新节点
 
 
 ## 使用
 
+* Client/Server模式
+* Mesh模式
+
+| ![](./docs/diagrams/client-server.jpg)| ![](./docs/diagrams/conduit.jpg) |
+|-----------------------|-----------------------|
+| Client-Server模式      | Mesh模式              |
+
+
 ### 1. Client-Server模式
+
+所有在```Host A```访问```:80```端口都会经过```Host B(172.168.0.11:5053)```访问到```127.0.0.1:80```:
 
 ![](./docs/diagrams/client-server.jpg)
 
@@ -75,9 +88,8 @@ log:
 
 ```
 
-此时所有在```Host A```访问```:80```端口都会经过```Host B(172.168.0.11:5053)```访问到```127.0.0.1:80```
-
 ### 2. Mesh模式
+配置集群成为一个A B C D互相访问都走mTLS通道的透明代理Mesh。
 
 ![](./docs/diagrams/conduit.jpg)
 
@@ -112,7 +124,6 @@ log:
   level: info
   file: /opt/conduit/log/manager.log
 ```
-
 
 配置做为客户端和服务端：
 
@@ -156,8 +167,6 @@ log:
 /opt/conduit/bin/conduit -c /opt/conduit/conf/conduit.yaml
 
 ```
-
-配置集群成为一个A B C D互相访问都走mTLS通道的透明代理Mesh。
 
 
 ## 获取
