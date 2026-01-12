@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 /*
  * Apache License 2.0
  *
