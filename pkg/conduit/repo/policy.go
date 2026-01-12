@@ -30,7 +30,7 @@ func (cache *cache) DelIPPortPolicy(ipport string) {
 	cache.mtx.Lock()
 	defer cache.mtx.Unlock()
 
-	delete(cache.ipPolicies, ipport)
+	delete(cache.ipportPolicies, ipport)
 }
 
 func (cache *cache) AddPortPolicy(port int, policy *Policy) {
